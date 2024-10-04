@@ -6,6 +6,7 @@
 #include <SD.h>
 #include <FS.h>
 #include <S25FLx.h>
+#include <ms4525do.h>
 
 template <class... Args>
 void pr_debug(Args... words)
@@ -17,8 +18,8 @@ void pr_debug(Args... words)
 }
 
 SPIClass vspi(VSPI); // microSD SPI flash 用
-SPIClass hspi(HSPI); // microSD SPI flashを software spiで扱うためのもの
-flash flash1;
+flash flash1; // SPI flash 用
+bfs::Ms4525do
 
 // VSPI 記録用
 #define CS_1_1 15 // MicroSD
@@ -53,7 +54,7 @@ void setup()
 
   vspi.begin(CLK_1, MISO_1, MOSI_1, CS_1_1);
   flash1.waitforit(); // use between each communication to make sure S25FLxx is ready to go.
-  flash1.read_info(); //will return an error if the chip isn't wired up correctly. 
+  flash1.read_info(); //will return an error if the chip isn't wired up correctly.
 
   WiFi.disconnect(true); // wifiをoffにして少電力を狙ってみる
   if (!SD.begin(CS_1_1, vspi))

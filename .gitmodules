@@ -1,9 +1,6 @@
 [submodule "lib/S25FLx"]
 	path = lib/S25FLx
-	url = https://github.com/BleepLabs/S25FLx.git
+	url = https://github.com/Natsu-B/S25FLx
 [submodule "lib/ms4525do"]
 	path = lib/ms4525do
 	url = https://github.com/bolderflight/ms4525do.git
-[submodule "lib/CREATE"]
-	path = lib/CREATE
-	url = https://github.com/CREATE-ROCKET/Avi_ESP_Libs.git
