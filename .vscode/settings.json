@@ -1,6 +1,21 @@
 {
     "files.associations": {
-        "deque": "cpp"
+        "deque": "cpp",
+        "sd_mmc": "cpp",
+        "memory": "cpp",
+        "s25flx.h": "c",
+        "array": "c",
+        "string": "c",
+        "unordered_map": "c",
+        "unordered_set": "c",
+        "vector": "c",
+        "string_view": "c",
+        "initializer_list": "c",
+        "*.tcc": "c"
     },
-    "C_Cpp.errorSquiggles": "disabled"
+    "C_Cpp.errorSquiggles": "disabled",
+    "cmake.ignoreCMakeListsMissing": true,
+    "cSpell.words": [
+        "Pitot"
+    ]
 }
