@@ -1,10 +1,12 @@
 #ifndef _sd_fast_
 #define _sd_fast_
 
-namespace sd_mmc {
+namespace sd_mmc
+{
     // setup
     int init();
     // write
+    void writeDataToSD(void *pvParameter);
 }
 
 #endif

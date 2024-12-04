@@ -12,6 +12,13 @@
 
 #endif
 
+// distribute_dataから一度に送信するデータの個数
+// SPIFlashが8bit* 256の配列単位で読み書きするため、
+// Pitot (float型(32bit) * 2) のデータを32個単位で読み書きすることにした。
+inline constexpr int numof_maxData = 32;
+// SPIFlashが読み書きするデータの単位
+inline constexpr int numof_writeData = 128;
+
 namespace pitot
 { // ピトー管
     const int SDA = 21;
@@ -54,21 +61,9 @@ namespace debug
     const int DEVINPUT = 17;
 }
 
-// 以下 include
-#if !defined(DEBUG) || defined(PITOT)
-#include "pitot.h"
-#endif
-
-#if !defined(DEBUG) || defined(SD_FAST)
-#include "SD_fast.h"
-#endif
-
-#if !defined(DEBUG) || defined(SPIFLASH)
-#include "flash.h"
-#endif
-
-#if !defined(DEBUG) || defined(CAN_MCP2562)
-#include "CAN_MCP2562.h"
-#endif
+struct Data {
+    float pa; // 圧力
+    float temp; // 温度
+};
 
 #endif

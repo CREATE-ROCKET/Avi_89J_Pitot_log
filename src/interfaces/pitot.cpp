@@ -2,12 +2,13 @@
 #include "lib.h"
 #include "debug.h"
 #include <ms4525do.h>
+#include <task_queue.h>
 
 #if !defined(DEBUG) || defined(PITOT)
 
 bfs::Ms4525do pres;
 
-volatile float data[2];
+Data pitotData; //volatileにしなくて大丈夫かは要検証
 
 namespace pitot
 {
@@ -35,9 +36,10 @@ namespace pitot
     void IRAM_ATTR getPitotDataTask(void *pvParameter) {
         while(true) {
             if (pres.Read()) {
-                data[0] = pres.pres_pa();
-                data[1] = pres.die_temp_c();
-                xQueueSend(PitotToDistributeQue, &data, 0);
+                pitotData.pa = pres.pres_pa();
+                pitotData.temp = pres.die_temp_c();
+                xQueueSend(PitotToDistributeQueue, &pitotData, 0);
+                vTaskResume(sendDataToEveryICTaskHandle);
             }
             vTaskDelay(10);
         }

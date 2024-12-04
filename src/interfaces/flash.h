@@ -4,6 +4,7 @@
 namespace flash
 {
     int init();
+    void writeDataToFlash(void *pvParameter);
 }
 
 #endif
