@@ -4,7 +4,7 @@
 namespace pitot
 {
     int init();
-    void getPitotDataTask(void *pvParameter);
+    void getPitotData(void *pvParameter);
 }
 
 #endif

@@ -30,41 +30,29 @@
 // DEBUG_INPUT
 //    IO17    task1,
 
-
 #include <Arduino.h>
 #include "lib.h"
 #include "debug.h"
 #include "task_queue.h"
-#include "commonTask.h"
-
-#if !defined(DEBUG) || defined(PITOT)
+#include "task.h"
 #include "interfaces/pitot.h"
-#endif
-
-#if !defined(DEBUG) || defined(SD_FAST)
 #include "interfaces/SD_fast.h"
-#endif
-
-#if !defined(DEBUG) || defined(SPIFLASH)
 #include "interfaces/flash.h"
-#endif
-
-#if !defined(DEBUG) || defined(CAN_MCP2562)
 #include "interfaces/CAN_MCP2562.h"
-#endif
 
 // task handle
-TaskHandle_t getPitotDataTaskHandle = nullptr; // pitotからデータを取得し、それをsendDataToEveryICへ送る 優先度 -1
-TaskHandle_t sendDataToEveryICTaskHandle = nullptr; // getPitotDataから得たデータを各端末に送る
-TaskHandle_t writeDataToFlashTaskHandle = nullptr; // SPI_Flashにデーターを書き込む
-TaskHandle_t makeParityTaskHandle = nullptr; // Micro SD記録用のデータにパリティをつける
-TaskHandle_t writeDataToSDTaskHandle = nullptr; // makeParityから受け取ったデータをMicroSDに書き込む
-TaskHandle_t sendDataByCanTaskHandle = nullptr; // sendDataToEveryICから受け取ったデータを送る
+TaskHandle_t getPitotDataTaskHandle;      // pitotからデータを取得し、それをsendDataToEveryICへ送る 優先度 -1
+TaskHandle_t sendDataToEveryICTaskHandle; // getPitotDataから得たデータを各端末に送る
+TaskHandle_t writeDataToFlashTaskHandle;  // SPI_Flashにデーターを書き込む
+TaskHandle_t makeParityTaskHandle;        // sendDataToEveryICから受け取ったデータを加工してwriteDataToSDに送る
+TaskHandle_t writeDataToSDTaskHandle;     // makeParityから受け取ったデータやログをMicroSDに書き込む
+TaskHandle_t sendDataByCanTaskHandle;     // sendDataToEveryICから受け取ったデータを送る
 
 // queue handle
-QueueHandle_t PitotToDistributeQueue; // PitotからsendDataにデータを渡すQueue
-QueueHandle_t DistributeToFlashQueue; // sendDataからFlashにデータを渡すQueue
-QueueHandle_t DistributeToSDQueue;    // sendDataからSDにデータを渡すQueue
+QueueHandle_t PitotToDistributeQueue;  // PitotからsendDataにデータを渡すQueue
+QueueHandle_t DistributeToFlashQueue;  // sendDataからFlashにデータを渡すQueue
+QueueHandle_t DistributeToParityQueue; // sendDataからParityにデータを渡すQueue
+QueueHandle_t ParityToSDQueue;         // ParityからSDにデータを渡すQueue
 
 #ifdef DEBUG
 
@@ -97,6 +85,78 @@ void pr_feature_fg()
 #endif
 }
 
+void pr_reset_reason()
+{
+  esp_reset_reason_t reason = esp_reset_reason();
+  switch (reason)
+  {
+  case ESP_RST_UNKNOWN:
+    Serial.println("Reset reason can not be determined");
+    break;
+  case ESP_RST_POWERON:
+    Serial.println("Reset due to power-on event");
+    break;
+  case ESP_RST_EXT:
+    Serial.println("Reset by external pin (not applicable for ESP32)");
+    break;
+  case ESP_RST_SW:
+    Serial.println("Software reset via esp_restart");
+    break;
+  case ESP_RST_PANIC:
+    Serial.println("Software reset due to exception/panic");
+    break;
+  case ESP_RST_INT_WDT:
+    Serial.println("Reset (software or hardware) due to interrupt watchdog");
+    break;
+  case ESP_RST_TASK_WDT:
+    Serial.println("Reset due to task watchdog");
+    break;
+  case ESP_RST_WDT:
+    Serial.println("Reset due to other watchdogs");
+    break;
+  case ESP_RST_DEEPSLEEP:
+    Serial.println("Reset after exiting deep sleep mode");
+    break;
+  case ESP_RST_BROWNOUT:
+    Serial.println("Brownout reset (software or hardware)");
+    break;
+  case ESP_RST_SDIO:
+    Serial.println("Reset over SDIO");
+    break;
+  default:
+    break;
+  }
+}
+
+void error_stack_sd()
+{
+  error_log("Stack Smashed!!! by writeDataToSD");
+}
+
+void error_stack_can()
+{
+  error_log("Stack Smashed!!! by SendDataByCan");
+}
+
+void error_stack_parity()
+{
+  error_log("Stack Smashed!!! by makeParityTask");
+}
+
+void error_stack_distribute()
+{
+  error_log("Stack Smashed!!! by sendDataToEveryIC");
+}
+
+void error_stack_flash()
+{
+  error_log("Stack Smashed!!! by writeDataToFlash");
+}
+
+void error_stack_pitot()
+{
+  error_log("Stack Smashed!!! by getPitotData");
+}
 #endif
 
 void setup()
@@ -111,6 +171,7 @@ void setup()
   }
   Serial.println("Debug mode is on.");
   pr_feature_fg();
+  pr_reset_reason();
 #endif
   pinMode(led::LED1, OUTPUT);
   pinMode(led::LED2, OUTPUT);
@@ -119,67 +180,86 @@ void setup()
 
 #if !defined(DEBUG) || defined(SD_FAST)
   result = sd_mmc::init();
-  if (result) {
-    pr_debug("SD_init failed: %d",result);
+  if (result)
+  {
+    pr_debug("SD_init failed: %d", result);
     ++error_num;
   }
 #endif
 #if !defined(DEBUG) || defined(SPIFLASH)
   result = flash::init();
-  if (result) {
-    pr_debug("flash_init failed: %d",result);
+  if (result)
+  {
+    pr_debug("flash_init failed: %d", result);
     ++error_num;
   }
 #endif
 #if !defined(DEBUG) || defined(PITOT)
   result = pitot::init();
-  if (result) {
-    pr_debug("pitot_init failed: %d",result);
+  if (result)
+  {
+    pr_debug("pitot_init failed: %d", result);
     error_num += 2;
   }
 #endif
 #if !defined(DEBUG) || defined(CAN_MCP2562)
   result = can::init();
-  if (result) {
-    pr_debug("can_init failed: %d",result);
+  if (result)
+  {
+    pr_debug("can_init failed: %d", result);
   }
 #endif
 
-  if (error_num >= 2) {
+  if (error_num >= 2)
+  {
     pr_debug("fatal error occurred!! rebooting ....");
-    ESP.restart();
+    ESP.restart(); // 再起動する
   }
 
   // TODO: 以前から記録されているflashのデータをmicroSDに書き込む
 
+  PitotToDistributeQueue = xQueueCreate(2, sizeof(Data *));
 #if !defined(DEBUG) || defined(PITOT)
-  PitotToDistributeQueue = xQueueCreate(2, sizeof(Data));
-  xTaskCreateUniversal(pitot::getPitotDataTask, "getPitotDataTask", 2048, NULL, 8, &getPitotDataTaskHandle, PRO_CPU_NUM);
+  xTaskCreateUniversal(pitot::getPitotData, "getPitotDataTask", 2048, NULL, 8, &getPitotDataTaskHandle, PRO_CPU_NUM);
 #else
-  // TODO: 模擬データ作成タスク
+  xTaskCreateUniversal(cmn_task::createData, "createDataForTest", 2048, NULL, 8, &getPitotDataTaskHandle, PRO_CPU_NUM);
 #endif
 
-  DistributeToFlashQueue = xQueueCreate(2, sizeof(u_int8_t[numof_writeData]));
-  DistributeToSDQueue = xQueueCreate(2, sizeof(Data[numof_maxData]));
+  DistributeToFlashQueue = xQueueCreate(2, sizeof(u_int8_t*));
+  DistributeToParityQueue = xQueueCreate(2, sizeof(Data*));
   xTaskCreateUniversal(cmn_task::distribute_data, "distributeData", 2048, NULL, 7, &sendDataToEveryICTaskHandle, APP_CPU_NUM);
-  vTaskSuspend(sendDataToEveryICTaskHandle);
 
 #if !defined(DEBUG) || defined(SD_FAST)
-  xTaskCreateUniversal(sd_mmc::writeDataToSD, "writeDataToSD", 4096, NULL, 6, &writeDataToSDTaskHandle, APP_CPU_NUM);
-  vTaskSuspend(writeDataToSDTaskHandle);
+  result = sd_mmc::makeNewFile();
+  if (result)
+  {
+    pr_debug("Can't make new file: %d", result);
+  }
+  xTaskCreateUniversal(sd_mmc::makeParity, "makeParity", 2048, NULL, 6, &makeParityTaskHandle, APP_CPU_NUM);
 #endif
+
+  ParityToSDQueue = xQueueCreate(10, sizeof(char *));
+  xTaskCreateUniversal(sd_mmc::writeDataToSD, "writeDataToSD", 4096, NULL, 6, &writeDataToSDTaskHandle, APP_CPU_NUM);
 
 #if !defined(DEBUG) || defined(SPIFLASH)
   xTaskCreateUniversal(flash::writeDataToFlash, "writeDataToFlash", 4096, NULL, 6, &writeDataToFlashTaskHandle, PRO_CPU_NUM);
-  vTaskSuspend(writeDataToFlashTaskHandle);
 #endif
 
   // TODO: CANも実装する
 
   digitalWrite(led::LED1, HIGH);
   digitalWrite(led::LED2, LOW);
+#if defined(DEBUG) && defined(SD_FAST)
+  vApplicationStackOverflowHook(writeDataToSDTaskHandle, "writeDataToSD");
+  vApplicationStackOverflowHook(writeDataToFlashTaskHandle, "writeDataToFlash");
+  vApplicationStackOverflowHook(sendDataByCanTaskHandle, "SendDataByCan");
+  vApplicationStackOverflowHook(sendDataToEveryICTaskHandle, "sendDataToEveryIC");
+  vApplicationStackOverflowHook(makeParityTaskHandle, "makeParityTask");
+  vApplicationStackOverflowHook(getPitotDataTaskHandle, "getPitotData");
+#endif
 }
 
-void loop() {
+void loop()
+{
   vTaskDelay(10000); // cpu を使いすぎないように
 }

@@ -4,6 +4,7 @@
 #include "S25FL127S 1.0.0/src/SPIflash.h"
 #include <Arduino.h>
 #include "task_queue.h"
+#include "memory_controller.h"
 
 #if !defined(DEBUG) || defined(SPIFLASH)
 
@@ -32,25 +33,16 @@ namespace flash
         while (true)
         {
             uint8_t pitotData[256];
-            if (xQueueReceive(DistributeToFlashQueue, &pitotData, 0) == pdTRUE)
+            // Queueにデータがくるまで待つ
+            if (xQueueReceive(DistributeToFlashQueue, &pitotData, portMAX_DELAY) == pdTRUE)
             {
                 flash1.write(counter, pitotData);
+                mem_controller::delete_ptr();
                 counter += 0x100;
-                vTaskSuspend(NULL);
             }
             else
             {
-                if (counter < 50)
-                {
-                    ++counter;
-                    vTaskDelay(1);
-                }
-                else
-                {
-                    counter = 0;
-                    pr_debug("failed to receive DistributeToFlashQueue");
-                    vTaskSuspend(NULL);
-                }
+                pr_debug("failed to receive DistributeToFlashQueue");
             }
         }
     }

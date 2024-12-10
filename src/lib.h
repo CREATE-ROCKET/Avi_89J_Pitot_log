@@ -5,19 +5,23 @@
 
 #ifdef DEBUG // debug時に機能のON/OFFを切り替え
 
-#define CAN_MCP2562
-#define PITOT
-#define SD_FAST
-#define SPIFLASH
+//#define CAN_MCP2562
+//#define PITOT
+//#define SD_FAST
+//#define SPIFLASH
 
 #endif
 
 // distribute_dataから一度に送信するデータの個数
 // SPIFlashが8bit* 256の配列単位で読み書きするため、
 // Pitot (float型(32bit) * 2) のデータを32個単位で読み書きすることにした。
-inline constexpr int numof_maxData = 32;
+constexpr int numof_maxData = 32;
 // SPIFlashが読み書きするデータの単位
-inline constexpr int numof_writeData = 128;
+constexpr int numof_writeData = 128;
+
+// 必要なバッファサイズを計算する
+// 各行が最大で21文字 + 終端の '\0'
+constexpr int bufferSize = numof_maxData * (10 + 1 + 10 + 1) + 1; // 673
 
 namespace pitot
 { // ピトー管
@@ -61,8 +65,9 @@ namespace debug
     const int DEVINPUT = 17;
 }
 
-struct Data {
-    float pa; // 圧力
+struct Data
+{
+    float pa;   // 圧力
     float temp; // 温度
 };
 

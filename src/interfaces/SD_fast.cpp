@@ -4,8 +4,12 @@
 #include "lib.h"
 #include "debug.h"
 #include "task_queue.h"
+#include "memory_controller.h"
 
 #if !defined(DEBUG) || defined(SD_FAST)
+
+String dataFile;
+String logFile;
 
 namespace sd_mmc
 {
@@ -54,10 +58,6 @@ namespace sd_mmc
   // newしているのでdelete[]等必要
   char *DataToChar(Data pitotData[256])
   {
-    // 必要なバッファサイズを計算する
-     // 各行が最大で21文字 + 終端の '\0'
-    size_t bufferSize = numof_maxData * (10 + 1 + 10 + 1) + 1;
-
     // バッファを動的に確保
     char *buffer = new char[bufferSize];
     if (buffer == nullptr)
@@ -73,7 +73,7 @@ namespace sd_mmc
       int written = snprintf(
           buffer + offset,
           bufferSize - offset,
-          "%.2f %.2f\n",
+          "%g %g\n",
           pitotData[i].pa,
           pitotData[i].temp);
 
@@ -90,9 +90,9 @@ namespace sd_mmc
     return buffer;
   }
 
-  int appendFile(fs::FS &fs, const char *path, const char *message)
+  int appendFile(fs::FS &fs, String path, const char *message)
   {
-    pr_debug("Appending to file: %s", path);
+    pr_debug("Appending to file: %s", path.c_str());
 
     File file = fs.open(path, FILE_APPEND);
     if (!file)
@@ -102,13 +102,11 @@ namespace sd_mmc
     }
     if (file.print(message))
     {
-      return 0; // success
-    }
-    else
-    {
       pr_debug("data append failed");
       return 2; // failed to append file
     }
+    file.close();
+    return 0;
   }
 
   int init()
@@ -150,24 +148,162 @@ namespace sd_mmc
     return 0; // sd init success
   }
 
-  // makeParityからchar型のデータを受け取り、それを書き込むタスク
-  // appendFileでopenとcloseを逐一やるため遅い可能性が高い
-  // TaskHandleはwriteDataToSDTaskHandle
-  IRAM_ATTR void writeDataToSD(void *pvParameter)
+  // SDのファイルを作成する
+  // - data
+  //  - data1.csv
+  //  - data2.csv
+  //  - ...
+  // - log
+  //  - log1.csv
+  //  - log2.csv
+  //  - ...
+  // - number.txt
+  // dataフォルダ直下にピトー管のデータを保存し、
+  // dataN.csv(Nは1,2,3...)の形式
+  // logフォルダ直下にerrorログやmemory残量等のデータを保存する。
+  // logN.csv(Nは1,2,3...)の形式
+  // Nは再起動ごとに1から順番に増えていき、number.txtに入っている数字で最大数を管理する。
+  int makeNewFile()
+  {
+    // まずnumber.txtがあるかどうかを判別し、あったらnumber.txtに入っている数字で
+    // dataN.csv、 logN.csvを作成、なかったらnumber.txtを作成して0を代入。
+    // number.txtは1足す
+    pr_debug("making new file....");
+    int number; // dataN.csv、 logN.csvのNの値
+
+    File root = SD_MMC.open("/");
+    bool is_found_number = false; // number.txtがあるかどうか
+    bool is_found_data = false;   // dataフォルダがあるかどうか
+    bool is_found_log = false;    // logフォルダがあるかどうか
+    bool isDir;
+    for (;;)
+    {
+      String filename = root.getNextFileName(&isDir);
+      if (filename = "") // 最後までいった or ファイルが1つもない
+        break;
+      if (isDir)
+      { // ディレクトリなら
+        if (filename == "data")
+        {
+          is_found_data = true;
+        }
+        if (filename == "log")
+        {
+          is_found_log = true;
+        }
+      }
+      else if (filename == "number.txt")
+      { // ファイルなら
+        is_found_number == true;
+      }
+
+      if (!is_found_number)
+      {
+        pr_debug("Cannot find number.txt assume the SD is init. creating...");
+        number = 0;
+        File file = SD_MMC.open("/number.txt", FILE_WRITE);
+        if (!file)
+        {
+          pr_debug("Failed to open file!!!");
+          return 1; // open error
+        }
+        if (!(file.print(1)))
+        {
+          pr_debug("Failed to write file!!!");
+          return 2;
+        }
+      }
+      else
+      {
+        pr_debug("number.txt found. reading...");
+        File file = SD_MMC.open("/number.txt");
+        if (!file)
+        {
+          pr_debug("Failed to open file!!!");
+          return 3;
+        }
+        String number_txt = "";
+        while (file.available())
+        {
+          number_txt.concat((char)file.read()); // += (char)file.read();
+        }
+        if (!number_txt.length())
+        {
+          pr_debug("number.txt maybe broken");
+          return 4;
+        }
+        number = number_txt.toInt(); // 1 or more
+        if (!number)
+        {
+          pr_debug("number.txt maybe contain nonInt: %s", number_txt.c_str());
+          return 5;
+        }
+        File file1 = SD_MMC.open("/number.txt", FILE_WRITE);
+        if (!file1)
+        {
+          pr_debug("Failed to open file!!!");
+          return 6; // open error
+        }
+        if (!(file1.print(number + 1)))
+        {
+          pr_debug("Failed to write file!!!");
+          return 7;
+        }
+      }
+    }
+    if (!is_found_data)
+    {
+      pr_debug("Can't find data dir. creating...");
+      if (!SD_MMC.mkdir("/data"))
+      {
+        pr_debug("Failed to create data dir");
+        return 8;
+      }
+    }
+    if (!is_found_log)
+    {
+      pr_debug("Can't find log dir. creating...");
+      if (!SD_MMC.mkdir("/log"))
+      {
+        pr_debug("Failed to create log dir");
+        return 9;
+      }
+    }
+
+    // dataN.csvとlogN.csvを作成する
+    dataFile = "/data/data";
+    logFile = "/log/log";
+    String number_path = String(number) + ".csv";
+    dataFile += number_path;
+    logFile += number_path;
+    pr_debug("dataFile: %s, logFile: %s", dataFile.c_str(), logFile.c_str());
+    File dataFileHandle = SD_MMC.open(dataFile, FILE_WRITE);
+    if (!dataFileHandle)
+    {
+      pr_debug("failed to open file");
+      return 10;
+    }
+    if (dataFileHandle.print("pascal, temperature\n"))
+    {
+      pr_debug("failed to write file");
+      return 11;
+    }
+    dataFileHandle.close();
+    File logFileHandle = SD_MMC.open(logFile, FILE_WRITE);
+    logFileHandle.close();
+    return 0;
+  }
+
+  IRAM_ATTR void makeParity(void *pvParameter)
   {
     while (true)
     {
       Data pitotData[numof_maxData];
-      if (xQueueReceive(DistributeToSDQueue, &pitotData, 0) == pdTRUE)
+      // Queueにデータがくるまで待つ
+      if (xQueueReceive(DistributeToParityQueue, &pitotData, portMAX_DELAY) == pdTRUE)
       {
         char *data = DataToChar(pitotData);
-        int result = appendFile(SD_MMC, "/test.txt", data);
-        if (result)
-        {
-          pr_debug("failed to write SD: %d", result);
-        }
-        delete[] data;
-        vTaskSuspend(NULL); // suspend ourselves
+        xQueueSend(ParityToSDQueue, data, 0);
       }
       else
       {
@@ -177,3 +313,29 @@ namespace sd_mmc
   }
 }
 #endif
+
+namespace sd_mmc
+{
+  // makeParityからchar型のデータを受け取り、それを書き込むタスク
+  // appendFileでopenとcloseを逐一やるため遅い可能性が高い
+  // TaskHandleはwriteDataToSDTaskHandle
+  IRAM_ATTR void writeDataToSD(void *pvParameter)
+  {
+    for (;;)
+    {
+      char *data;
+      if (xQueueReceive(ParityToSDQueue, &data, portMAX_DELAY) == pdTRUE)
+      {
+#if !defined(DEBUG) || defined(SD_FAST)
+        int result = appendFile(SD_MMC, dataFile, data);
+        if (result)
+        {
+          pr_debug("failed to write SD: %d", result);
+        }
+#endif
+        pr_debug("%s", data);
+        mem_controller::delete_ptr();
+      }
+    }
+  }
+}
