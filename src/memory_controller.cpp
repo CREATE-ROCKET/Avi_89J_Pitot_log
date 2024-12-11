@@ -11,8 +11,8 @@ namespace mem_controller
         Data *tmp_data = mem_manager.new_ptr();
         return tmp_data;
     }
-    void delete_ptr()
+    void delete_ptr(void *p)
     {
-        mem_manager.delete_ptr();
+        mem_manager.delete_ptr(p);
     }
 } // namespace mem_controller

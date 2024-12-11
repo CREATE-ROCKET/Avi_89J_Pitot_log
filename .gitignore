@@ -3,4 +3,4 @@
 *.d
 *.o
 *.out
-teraterm.log
+*.log

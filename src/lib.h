@@ -5,10 +5,10 @@
 
 #ifdef DEBUG // debug時に機能のON/OFFを切り替え
 
-//#define CAN_MCP2562
-//#define PITOT
+// #define CAN_MCP2562
+// #define PITOT
 //#define SD_FAST
-//#define SPIFLASH
+// #define SPIFLASH
 
 #endif
 
@@ -69,6 +69,12 @@ struct Data
 {
     float pa;   // 圧力
     float temp; // 温度
+};
+
+struct SD_Data
+{
+    bool is_log;
+    char *data;
 };
 
 #endif

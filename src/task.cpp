@@ -20,8 +20,7 @@ namespace cmn_task
 {
     int counter = 0;
 
-    PitotDataUnion pitotData[numof_maxData];
-    uint8_t *DataForFlash = pitotData->Uint8Data;
+    PitotDataUnion pitotData;
     // メモリの利用が地獄になってる
     // getPitotDataでnewされたデータを受け取って、
     // makeParity、 writeDataToFlash、 SendDataByCan に送信し、
@@ -30,18 +29,23 @@ namespace cmn_task
     {
         while (true)
         {
+            Data *tmp_data;
             // Queueにデータがくるまで待つ
-            if (xQueueReceive(PitotToDistributeQueue, &pitotData->pitotData[counter], portMAX_DELAY) == pdTRUE)
+            if (xQueueReceive(PitotToDistributeQueue, &tmp_data, portMAX_DELAY) == pdTRUE)
             {
+                pitotData.pitotData[counter] = *tmp_data;
                 ++counter;
-                if (counter >= numof_maxData) // 一度に送信するタスク
+
+                if (counter >= numof_maxData - 1) // 一度に送信するタスク
                 {
                     counter = 0;
-#ifdef SD_FAST
-                    xQueueSend(DistributeToParityQueue, &pitotData, 0);
-#endif
+                    for (int i = 0; i < numof_maxData; i++)
+                    {
+                        pr_debug("%g, %g", pitotData.pitotData->pa, pitotData.pitotData->temp);
+                    }
+                    xQueueSend(DistributeToParityQueue, pitotData.pitotData, 0);
 #ifdef SPIFLASH
-                    xQueueSend(DistributeToFlashQueue, DataForFlash, 0);
+                    xQueueSend(DistributeToFlashQueue, pitotData.Uint8Data, 0);
 #endif
                 }
             }
@@ -55,6 +59,7 @@ namespace cmn_task
 #if defined(DEBUG) && !defined(PITOT)
     void IRAM_ATTR createData(void *pvParameter)
     {
+        float counter = 0;
         portTickType xLastWakeTime = xTaskGetTickCount();
         for (;;)
         {

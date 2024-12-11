@@ -54,42 +54,6 @@ namespace sd_mmc
   }
 #endif
 
-  // Data型の配列をchar型に変換する
-  // newしているのでdelete[]等必要
-  char *DataToChar(Data pitotData[256])
-  {
-    // バッファを動的に確保
-    char *buffer = new char[bufferSize];
-    if (buffer == nullptr)
-    {
-      return nullptr; // メモリ確保失敗時はnullptrを返す
-    }
-
-    size_t offset = 0;
-
-    for (size_t i = 0; i < numof_maxData; ++i)
-    {
-      // snprintfを使って1行をフォーマット
-      int written = snprintf(
-          buffer + offset,
-          bufferSize - offset,
-          "%g %g\n",
-          pitotData[i].pa,
-          pitotData[i].temp);
-
-      // バッファオーバーフローを防止
-      if (written < 0 || offset + written >= bufferSize)
-      {
-        delete[] buffer; // メモリを解放して失敗を返す
-        return nullptr;
-      }
-
-      offset += written;
-    }
-
-    return buffer;
-  }
-
   int appendFile(fs::FS &fs, String path, const char *message)
   {
     pr_debug("Appending to file: %s", path.c_str());
@@ -293,17 +257,67 @@ namespace sd_mmc
     logFileHandle.close();
     return 0;
   }
+}
+#endif
+
+namespace sd_mmc
+{
+  // Data型の配列をchar型に変換する
+  // newしているのでdelete[]等必要
+  char *DataToChar(Data pitotData[numof_maxData])
+  {
+    // バッファを動的に確保
+    char *buffer = new char[bufferSize];
+    if (buffer == nullptr)
+    {
+      return nullptr; // メモリ確保失敗時はnullptrを返す
+    }
+
+    size_t offset = 0;
+
+    for (size_t i = 0; i < numof_maxData; ++i)
+    {
+      // snprintfを使って1行をフォーマット
+      int written = snprintf(
+          buffer + offset,
+          bufferSize - offset,
+          "%g, %g\n",
+          pitotData[i].pa,
+          pitotData[i].temp);
+
+      // バッファオーバーフローを防止
+      if (written < 0 || offset + written >= bufferSize)
+      {
+        delete[] buffer; // メモリを解放して失敗を返す
+        return nullptr;
+      }
+
+      offset += written;
+    }
+    buffer[offset] = '\0';
+    return buffer;
+  }
 
   IRAM_ATTR void makeParity(void *pvParameter)
   {
     while (true)
     {
-      Data pitotData[numof_maxData];
+      Data* pitotData = nullptr;
       // Queueにデータがくるまで待つ
       if (xQueueReceive(DistributeToParityQueue, &pitotData, portMAX_DELAY) == pdTRUE)
       {
+        //for (int i = 0; i < numof_maxData; i++)
+        //{
+        //  pr_debug("%g, %g", pitotData[0].pa, pitotData[0].temp);
+        //} //これ入れると更におかしくなる 終端文字が見えてない???
         char *data = DataToChar(pitotData);
-        xQueueSend(ParityToSDQueue, data, 0);
+        pr_debug("%s", data);
+        mem_controller::delete_ptr(pitotData);
+        SD_Data *data_wrapper = new SD_Data;
+        data_wrapper->is_log = false;
+        data_wrapper->data = data;
+        // xQueueSend(ParityToSDQueue, &data_wrapper, 0);
+        delete[] pitotData;
       }
       else
       {
@@ -311,11 +325,6 @@ namespace sd_mmc
       }
     }
   }
-}
-#endif
-
-namespace sd_mmc
-{
   // makeParityからchar型のデータを受け取り、それを書き込むタスク
   // appendFileでopenとcloseを逐一やるため遅い可能性が高い
   // TaskHandleはwriteDataToSDTaskHandle
@@ -323,18 +332,35 @@ namespace sd_mmc
   {
     for (;;)
     {
-      char *data;
-      if (xQueueReceive(ParityToSDQueue, &data, portMAX_DELAY) == pdTRUE)
+      SD_Data *data_wrapper;
+      if (xQueueReceive(ParityToSDQueue, &data_wrapper, portMAX_DELAY) == pdPASS)
       {
-#if !defined(DEBUG) || defined(SD_FAST)
-        int result = appendFile(SD_MMC, dataFile, data);
-        if (result)
+        char *data = data_wrapper->data;
+        if (data_wrapper->is_log)
         {
-          pr_debug("failed to write SD: %d", result);
-        }
+#if !defined(DEBUG) || defined(SD_FAST)
+          int result = appendFile(SD_MMC, logFile, data_wrapper->data);
+          if (result)
+          {
+            pr_debug("failed to write SD: %d", result);
+          }
 #endif
-        pr_debug("%s", data);
-        mem_controller::delete_ptr();
+          pr_debug("log: %s", data);
+          delete[] data;
+        }
+        else
+        {
+#if !defined(DEBUG) || defined(SD_FAST)
+          int result = appendFile(SD_MMC, dataFile, data_wrapper->data);
+          if (result)
+          {
+            pr_debug("failed to write SD: %d", result);
+          }
+#endif
+          pr_debug("%s", data);
+          delete[] data;
+        }
+        delete data_wrapper;
       }
     }
   }
