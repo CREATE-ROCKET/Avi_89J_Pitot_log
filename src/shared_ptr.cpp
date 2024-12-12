@@ -5,13 +5,13 @@
 #include <Arduino.h>
 
 // counter_maxの数を求める
-#ifdef SPIFLASH
+#if !defined(DEBUG) || defined(SPIFLASH)
 const int counter_flash = 1;
 #else
 const int counter_flash = 0;
 #endif
 
-#ifdef CAN_MCP2562
+#if !defined(DEBUG) || defined(CAN_MCP2562)
 const int counter_can = 1;
 #else
 const int counter_can = 0;
@@ -35,14 +35,14 @@ MemoryManager::~MemoryManager()
 // new_ptr メソッド - メモリを確保して返す
 Data *MemoryManager::new_ptr()
 {
-    Data *ptr = new Data;
+    Data *ptr = new Data[numof_maxData];
     pointers.push_back(ptr);   // メモリポインタを管理リストに追加
     deleteCounts.push_back(0); // 新しく割り当てたメモリ用にカウントを初期化
     return ptr;
 }
 
 // delete_ptr メソッド - メモリを解放する
-void MemoryManager::delete_ptr(void *p)
+void MemoryManager::delete_ptr(Data *p)
 {
     for (size_t i = 0; i < pointers.size(); ++i)
     {
@@ -53,17 +53,14 @@ void MemoryManager::delete_ptr(void *p)
             // delete_ptrが3回呼ばれたらメモリ解放
             if (deleteCounts[i] == counter_max)
             {
-                for (int i = 0; i < numof_maxData; i++)
+                if (i != 0)
                 {
-                    if (i != 0)
-                    {
-                        error_log("Warning: Some pointers may not have been erased.");
-                    }
-                    pr_debug("free pointer!");
-                    delete pointers[i]; // メモリ解放
-                    pointers.erase(pointers.begin() + i);
-                    deleteCounts.erase(deleteCounts.begin() + i);
+                    error_log("Warning: Some pointers may not have been erased.");
                 }
+                //pr_debug("free pointer!");
+                delete p; // メモリ解放
+                pointers.erase(pointers.begin() + i);
+                deleteCounts.erase(deleteCounts.begin() + i);
             }
             return;
         }

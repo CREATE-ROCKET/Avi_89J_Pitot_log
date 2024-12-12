@@ -59,10 +59,7 @@ void error_log(const char *format, Args... args)
       break;
     }
     //pr_debug("%s", buffer);
-    SD_Data *data_wrapper = new SD_Data;
-    data_wrapper->is_log = true;
-    data_wrapper->data = buffer;
-    if (xQueueSend(ParityToSDQueue, &data_wrapper, 0) != pdPASS)
+    if (xQueueSend(ParityToSDQueue, &buffer, 0) != pdPASS)
     {
       delete[] buffer;
       pr_debug("failed to make error log");

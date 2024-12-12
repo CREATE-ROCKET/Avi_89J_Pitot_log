@@ -1,6 +1,8 @@
 #ifndef _lib_
 #define _lib_
 
+#include <stdint.h>
+
 #define DEBUG // debug時利用
 
 #ifdef DEBUG // debug時に機能のON/OFFを切り替え
@@ -17,11 +19,11 @@
 // Pitot (float型(32bit) * 2) のデータを32個単位で読み書きすることにした。
 constexpr int numof_maxData = 32;
 // SPIFlashが読み書きするデータの単位
-constexpr int numof_writeData = 128;
+constexpr int numof_writeData = 256;
 
 // 必要なバッファサイズを計算する
 // 各行が最大で21文字 + 終端の '\0'
-constexpr int bufferSize = numof_maxData * (10 + 1 + 10 + 1) + 1; // 673
+constexpr int bufferSize = numof_maxData * (10 + 1 + 10 + 1) * 2 + 1; // 673
 
 namespace pitot
 { // ピトー管
@@ -67,14 +69,9 @@ namespace debug
 
 struct Data
 {
-    float pa;   // 圧力
-    float temp; // 温度
-};
-
-struct SD_Data
-{
-    bool is_log;
-    char *data;
+    uint32_t time; // ESPタイマ初期化時からの経過時間 ms
+    float pa;      // 圧力
+    float temp;    // 温度
 };
 
 #endif

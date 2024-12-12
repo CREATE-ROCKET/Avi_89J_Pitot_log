@@ -247,7 +247,7 @@ namespace sd_mmc
       pr_debug("failed to open file");
       return 10;
     }
-    if (dataFileHandle.print("pascal, temperature\n"))
+    if (dataFileHandle.print("time, pascal, temperature\n"))
     {
       pr_debug("failed to write file");
       return 11;
@@ -281,7 +281,8 @@ namespace sd_mmc
       int written = snprintf(
           buffer + offset,
           bufferSize - offset,
-          "%g, %g\n",
+          "%d, %g, %g\n",
+          pitotData[i].time,
           pitotData[i].pa,
           pitotData[i].temp);
 
@@ -294,7 +295,6 @@ namespace sd_mmc
 
       offset += written;
     }
-    buffer[offset] = '\0';
     return buffer;
   }
 
@@ -302,22 +302,18 @@ namespace sd_mmc
   {
     while (true)
     {
-      Data* pitotData = nullptr;
+      Data *pitotData = nullptr;
       // Queueにデータがくるまで待つ
       if (xQueueReceive(DistributeToParityQueue, &pitotData, portMAX_DELAY) == pdTRUE)
       {
-        //for (int i = 0; i < numof_maxData; i++)
-        //{
-        //  pr_debug("%g, %g", pitotData[0].pa, pitotData[0].temp);
-        //} //これ入れると更におかしくなる 終端文字が見えてない???
         char *data = DataToChar(pitotData);
+        if (!pitotData){
+          pr_debug("nullptr found");
+          continue;
+        }
         pr_debug("%s", data);
         mem_controller::delete_ptr(pitotData);
-        SD_Data *data_wrapper = new SD_Data;
-        data_wrapper->is_log = false;
-        data_wrapper->data = data;
-        // xQueueSend(ParityToSDQueue, &data_wrapper, 0);
-        delete[] pitotData;
+        xQueueSend(ParityToSDQueue, &data, 0);
       }
       else
       {
@@ -330,38 +326,47 @@ namespace sd_mmc
   // TaskHandleはwriteDataToSDTaskHandle
   IRAM_ATTR void writeDataToSD(void *pvParameter)
   {
+    static QueueSetHandle_t xQueueSet;
+    xQueueSet = xQueueCreateSet(2 * sizeof(char *));
+    xQueueAddToSet(ParityToSDQueue, xQueueSet);
+    xQueueAddToSet(LogToSDQueue, xQueueSet);
     for (;;)
     {
-      SD_Data *data_wrapper;
-      if (xQueueReceive(ParityToSDQueue, &data_wrapper, portMAX_DELAY) == pdPASS)
+      char *data;
+      QueueHandle_t queue = xQueueSelectFromSet(xQueueSet, portMAX_DELAY);
+      if (queue == ParityToSDQueue)
       {
-        char *data = data_wrapper->data;
-        if (data_wrapper->is_log)
+        if (xQueueReceive(ParityToSDQueue, &data, 0) == pdTRUE)
         {
 #if !defined(DEBUG) || defined(SD_FAST)
-          int result = appendFile(SD_MMC, logFile, data_wrapper->data);
-          if (result)
-          {
-            pr_debug("failed to write SD: %d", result);
-          }
-#endif
-          pr_debug("log: %s", data);
-          delete[] data;
-        }
-        else
-        {
-#if !defined(DEBUG) || defined(SD_FAST)
-          int result = appendFile(SD_MMC, dataFile, data_wrapper->data);
+          int result = appendFile(SD_MMC, dataFile, data);
           if (result)
           {
             pr_debug("failed to write SD: %d", result);
           }
 #endif
           pr_debug("%s", data);
-          delete[] data;
         }
-        delete data_wrapper;
+        else
+          pr_debug("failed to receive Queue");
       }
+      else
+      {
+        if (xQueueReceive(LogToSDQueue, &data, 0) == pdTRUE)
+        {
+#if !defined(DEBUG) || defined(SD_FAST)
+          int result = appendFile(SD_MMC, logFile, data);
+          if (result)
+          {
+            pr_debug("failed to write SD: %d", result);
+          }
+#endif
+          pr_debug("log: %s", data);
+        }
+        else
+          pr_debug("failed to receive Queue");
+      }
+      delete[] data;
     }
   }
 }

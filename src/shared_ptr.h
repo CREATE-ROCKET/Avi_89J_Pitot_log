@@ -11,14 +11,14 @@
 class MemoryManager{
     private:
 
-    std::vector<Data *> pointers;  // 確保したメモリのポインタを格納
+    std::vector<void *> pointers;  // 確保したメモリのポインタを格納
     std::vector<int> deleteCounts; // 各ポインタに対するdeleteの呼び出し回数を管理
 
     public:
     MemoryManager();
     ~MemoryManager();
     Data* new_ptr();
-    void delete_ptr(void *p);
+    void delete_ptr(Data *p);
 };
 
 #else

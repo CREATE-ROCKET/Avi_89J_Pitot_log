@@ -53,6 +53,7 @@ QueueHandle_t PitotToDistributeQueue;  // PitotからsendDataにデータを渡�
 QueueHandle_t DistributeToFlashQueue;  // sendDataからFlashにデータを渡すQueue
 QueueHandle_t DistributeToParityQueue; // sendDataからParityにデータを渡すQueue
 QueueHandle_t ParityToSDQueue;         // ParityからSDにデータを渡すQueue
+QueueHandle_t LogToSDQueue; // LogをSDに保存するタスク
 
 #ifdef DEBUG
 
@@ -197,15 +198,15 @@ void setup()
 
   // TODO: 以前から記録されているflashのデータをmicroSDに書き込む
 
-  PitotToDistributeQueue = xQueueCreate(10, sizeof(Data *));
+  PitotToDistributeQueue = xQueueCreate(20, sizeof(Data *));
 #if !defined(DEBUG) || defined(PITOT)
   xTaskCreateUniversal(pitot::getPitotData, "getPitotDataTask", 2048, NULL, 8, &getPitotDataTaskHandle, PRO_CPU_NUM);
 #else
-  xTaskCreateUniversal(cmn_task::createData, "createDataForTest", 8096, NULL, 8, &getPitotDataTaskHandle, PRO_CPU_NUM);
+  xTaskCreateUniversal(cmn_task::createData, "createDataForTest", 2048, NULL, 8, &getPitotDataTaskHandle, PRO_CPU_NUM);
 #endif
 
-  DistributeToFlashQueue = xQueueCreate(2, sizeof(u_int8_t *));
-  DistributeToParityQueue = xQueueCreate(2, sizeof(Data *));
+  DistributeToFlashQueue = xQueueCreate(5, sizeof(u_int8_t *));
+  DistributeToParityQueue = xQueueCreate(5, sizeof(Data *));
   xTaskCreateUniversal(cmn_task::distribute_data, "distributeData", 8096, NULL, 7, &sendDataToEveryICTaskHandle, APP_CPU_NUM);
 
 #if !defined(DEBUG) || defined(SD_FAST)
@@ -217,7 +218,8 @@ void setup()
 #endif
   xTaskCreateUniversal(sd_mmc::makeParity, "makeParity", 8096, NULL, 6, &makeParityTaskHandle, APP_CPU_NUM);
 
-  ParityToSDQueue = xQueueCreate(10, sizeof(SD_Data *));
+  ParityToSDQueue = xQueueCreate(10, sizeof(char *));
+  LogToSDQueue = xQueueCreate(10, sizeof(char*));
   xTaskCreateUniversal(sd_mmc::writeDataToSD, "writeDataToSD", 8096, NULL, 6, &writeDataToSDTaskHandle, APP_CPU_NUM);
 
 #if !defined(DEBUG) || defined(SPIFLASH)

@@ -6,47 +6,35 @@
 #include <Ticker.h>
 #include "memory_controller.h"
 
-// Flashで書き込むために Data型をunit8_t[8]に変換する
-union PitotDataUnion
-{
-    Data pitotData[numof_maxData];
-    uint8_t Uint8Data[numof_maxData * 8];
-};
-
 Ticker blinker1;
 Ticker blinker2;
 
 namespace cmn_task
 {
-    int counter = 0;
-
-    PitotDataUnion pitotData;
-    // メモリの利用が地獄になってる
     // getPitotDataでnewされたデータを受け取って、
     // makeParity、 writeDataToFlash、 SendDataByCan に送信し、
     // すべてで利用されたあとdeleteする
     void IRAM_ATTR distribute_data(void *pvParameter)
     {
+        Data *pitotData = mem_controller::new_ptr();
+        int counter = 0;
         while (true)
         {
-            Data *tmp_data;
+            Data *tmp_data = nullptr;
             // Queueにデータがくるまで待つ
             if (xQueueReceive(PitotToDistributeQueue, &tmp_data, portMAX_DELAY) == pdTRUE)
             {
-                pitotData.pitotData[counter] = *tmp_data;
+                pitotData[counter] = *tmp_data;
                 ++counter;
-
-                if (counter >= numof_maxData - 1) // 一度に送信するタスク
+                delete tmp_data;
+                if (counter >= numof_maxData) // 一度に送信するタスク
                 {
                     counter = 0;
-                    for (int i = 0; i < numof_maxData; i++)
-                    {
-                        pr_debug("%g, %g", pitotData.pitotData->pa, pitotData.pitotData->temp);
-                    }
-                    xQueueSend(DistributeToParityQueue, pitotData.pitotData, 0);
+                    xQueueSend(DistributeToParityQueue, &pitotData, 0);
 #ifdef SPIFLASH
-                    xQueueSend(DistributeToFlashQueue, pitotData.Uint8Data, 0);
+                    xQueueSend(DistributeToFlashQueue, &pitotData, 0);
 #endif
+                    pitotData = mem_controller::new_ptr();
                 }
             }
             else
@@ -63,10 +51,12 @@ namespace cmn_task
         portTickType xLastWakeTime = xTaskGetTickCount();
         for (;;)
         {
-            Data *pitotData = mem_controller::new_ptr();
+            Data *pitotData = new Data;
+            // 2^32ms = 49日 uint32_tで足りると判断
+            pitotData->time = static_cast<uint32_t>(esp_timer_get_time());
             pitotData->pa = 12.099567;
             pitotData->temp = 23.082558; // test用の値 実際に取れた値の一つ
-            if (xQueueSend(PitotToDistributeQueue, &pitotData, 0) != pdTRUE)
+            if (xQueueSend(PitotToDistributeQueue, &pitotData, 2) != pdTRUE)
             {
                 error_log("%s(%d) failed to send queue date:%lu Queue:%d", __FILE__, __LINE__, millis(), uxQueueMessagesWaiting(PitotToDistributeQueue));
                 delete pitotData;

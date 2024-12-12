@@ -5,7 +5,8 @@
 
 namespace mem_controller {
     Data* new_ptr();
-    void delete_ptr(void *p);
+    void delete_ptr(Data *p);
+    void delete_ptr(uint8_t *p);
 }
 
 #endif
