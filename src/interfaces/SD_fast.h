@@ -10,6 +10,8 @@ namespace sd_mmc
     void makeParity(void *pvParameter);
     // write
     void writeDataToSD(void *pvParameter);
+    // close task(interrupt)
+    void onButton();
 }
 
 #endif

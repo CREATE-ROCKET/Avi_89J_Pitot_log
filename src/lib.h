@@ -9,7 +9,7 @@
 
 // #define CAN_MCP2562
 // #define PITOT
-//#define SD_FAST
+// #define SD_FAST
 // #define SPIFLASH
 
 #endif
@@ -23,7 +23,8 @@ constexpr int numof_writeData = 256;
 
 // 必要なバッファサイズを計算する
 // 各行が最大で21文字 + 終端の '\0'
-constexpr int bufferSize = numof_maxData * (10 + 1 + 10 + 1) * 2 + 1; // 673
+constexpr int bufferSize = 12 + 2 + 6 + 2 + 6 + 1;
+constexpr int AllbufferSize = numof_maxData * (bufferSize - 1)+ 1; //865
 
 namespace pitot
 { // ピトー管
@@ -63,8 +64,8 @@ namespace led
 }
 
 namespace debug
-{ // debug
-    const int DEVINPUT = 17;
+{ // debug用 SD_MMCのcloseに使うことにした PULLDOWN
+    const int DEBUG_INPUT = 17;
 }
 
 struct Data
@@ -73,5 +74,17 @@ struct Data
     float pa;      // 圧力
     float temp;    // 温度
 };
+
+struct SD_Data
+{
+    bool is_log;
+    char *data;
+};
+
+#define STACK_DEPTH 32
+typedef struct {
+    uint32_t pc[STACK_DEPTH];
+    uint32_t sp[STACK_DEPTH];
+} ExceptionInfo_t;
 
 #endif

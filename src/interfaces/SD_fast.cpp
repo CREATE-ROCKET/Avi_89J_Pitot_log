@@ -10,6 +10,9 @@
 
 String dataFile;
 String logFile;
+TaskHandle_t SDcloseTaskHandle;
+File dataFileHandle;
+File logFileHandle;
 
 namespace sd_mmc
 {
@@ -57,7 +60,7 @@ namespace sd_mmc
   int appendFile(fs::FS &fs, String path, const char *message)
   {
     pr_debug("Appending to file: %s", path.c_str());
-
+    int64_t sd_write_time = esp_timer_get_time();
     File file = fs.open(path, FILE_APPEND);
     if (!file)
     {
@@ -70,6 +73,7 @@ namespace sd_mmc
       return 2; // failed to append file
     }
     file.close();
+    pr_debug("write time: %ld ms", esp_timer_get_time() - sd_write_time);
     return 0;
   }
 
@@ -160,60 +164,64 @@ namespace sd_mmc
       { // ファイルなら
         is_found_number == true;
       }
+    }
 
-      if (!is_found_number)
+    if (!is_found_number)
+    {
+      pr_debug("Cannot find number.txt assume the SD is init. creating...");
+      number = 0;
+      File file = SD_MMC.open("/number.txt", FILE_WRITE);
+      if (!file)
       {
-        pr_debug("Cannot find number.txt assume the SD is init. creating...");
-        number = 0;
-        File file = SD_MMC.open("/number.txt", FILE_WRITE);
-        if (!file)
-        {
-          pr_debug("Failed to open file!!!");
-          return 1; // open error
-        }
-        if (!(file.print(1)))
-        {
-          pr_debug("Failed to write file!!!");
-          return 2;
-        }
+        pr_debug("Failed to open file!!!");
+        return 1; // open error
       }
-      else
+      if (!(file.print(1)))
       {
-        pr_debug("number.txt found. reading...");
-        File file = SD_MMC.open("/number.txt");
-        if (!file)
-        {
-          pr_debug("Failed to open file!!!");
-          return 3;
-        }
-        String number_txt = "";
-        while (file.available())
-        {
-          number_txt.concat((char)file.read()); // += (char)file.read();
-        }
-        if (!number_txt.length())
-        {
-          pr_debug("number.txt maybe broken");
-          return 4;
-        }
-        number = number_txt.toInt(); // 1 or more
-        if (!number)
-        {
-          pr_debug("number.txt maybe contain nonInt: %s", number_txt.c_str());
-          return 5;
-        }
-        File file1 = SD_MMC.open("/number.txt", FILE_WRITE);
-        if (!file1)
-        {
-          pr_debug("Failed to open file!!!");
-          return 6; // open error
-        }
-        if (!(file1.print(number + 1)))
-        {
-          pr_debug("Failed to write file!!!");
-          return 7;
-        }
+        pr_debug("Failed to write file!!!");
+        return 2;
       }
+      file.close();
+    }
+    else
+    {
+      pr_debug("number.txt found. reading...");
+      File file = SD_MMC.open("/number.txt");
+      if (!file)
+      {
+        pr_debug("Failed to open file!!!");
+        return 3;
+      }
+      String number_txt = "";
+      while (file.available())
+      {
+        number_txt.concat((char)file.read()); // += (char)file.read();
+      }
+      if (!number_txt.length())
+      {
+        pr_debug("number.txt maybe broken");
+        return 4;
+      }
+      number = number_txt.toInt(); // 1 or more
+      if (!number)
+      {
+        pr_debug("number.txt maybe contain nonInt: %s", number_txt.c_str());
+        return 5;
+      }
+      file.close();
+
+      File file1 = SD_MMC.open("/number.txt", FILE_WRITE);
+      if (!file1)
+      {
+        pr_debug("Failed to open file!!!");
+        return 6; // open error
+      }
+      if (!(file1.print(number + 1)))
+      {
+        pr_debug("Failed to write file!!!");
+        return 7;
+      }
+      file1.close();
     }
     if (!is_found_data)
     {
@@ -241,7 +249,7 @@ namespace sd_mmc
     dataFile += number_path;
     logFile += number_path;
     pr_debug("dataFile: %s, logFile: %s", dataFile.c_str(), logFile.c_str());
-    File dataFileHandle = SD_MMC.open(dataFile, FILE_WRITE);
+    dataFileHandle = SD_MMC.open(dataFile, FILE_WRITE);
     if (!dataFileHandle)
     {
       pr_debug("failed to open file");
@@ -252,10 +260,23 @@ namespace sd_mmc
       pr_debug("failed to write file");
       return 11;
     }
+    logFileHandle = SD_MMC.open(logFile, FILE_WRITE);
     dataFileHandle.close();
-    File logFileHandle = SD_MMC.open(logFile, FILE_WRITE);
     logFileHandle.close();
     return 0;
+  }
+
+  void IRAM_ATTR SDcloseTask(void *pvParameter)
+  {
+    vTaskSuspend(writeDataToSDTaskHandle);
+    vTaskDelete(writeDataToSDTaskHandle);
+    //    SD_MMC.close();
+    vTaskDelete(NULL);
+  }
+
+  void IRAM_ATTR onButton()
+  {
+    xTaskCreateUniversal(sd_mmc::SDcloseTask, "SDcloseTask", 2048, NULL, 9, &SDcloseTaskHandle, APP_CPU_NUM);
   }
 }
 #endif
@@ -267,7 +288,7 @@ namespace sd_mmc
   char *DataToChar(Data pitotData[numof_maxData])
   {
     // バッファを動的に確保
-    char *buffer = new char[bufferSize];
+    char *buffer = new char[AllbufferSize];
     if (buffer == nullptr)
     {
       return nullptr; // メモリ確保失敗時はnullptrを返す
@@ -275,19 +296,19 @@ namespace sd_mmc
 
     size_t offset = 0;
 
-    for (size_t i = 0; i < numof_maxData; ++i)
+    for (int i = 0; i < numof_maxData; ++i)
     {
       // snprintfを使って1行をフォーマット
       int written = snprintf(
           buffer + offset,
-          bufferSize - offset,
-          "%d, %g, %g\n",
+          bufferSize,
+          "%u, %g, %g\n",
           pitotData[i].time,
           pitotData[i].pa,
           pitotData[i].temp);
 
       // バッファオーバーフローを防止
-      if (written < 0 || offset + written >= bufferSize)
+      if (written < 0 || offset + written >= AllbufferSize)
       {
         delete[] buffer; // メモリを解放して失敗を返す
         return nullptr;
@@ -307,13 +328,21 @@ namespace sd_mmc
       if (xQueueReceive(DistributeToParityQueue, &pitotData, portMAX_DELAY) == pdTRUE)
       {
         char *data = DataToChar(pitotData);
-        if (!pitotData){
+        // pr_debug("%s(%d) :%s", __FILE__, __LINE__, data);
+        if (!data)
+        {
           pr_debug("nullptr found");
           continue;
         }
-        pr_debug("%s", data);
-        mem_controller::delete_ptr(pitotData);
-        xQueueSend(ParityToSDQueue, &data, 0);
+        // mem_controller::delete_ptr(pitotData);
+        SD_Data *data_wrapper = new SD_Data;
+        data_wrapper->is_log = false;
+        data_wrapper->data = data;
+        if (xQueueSend(ParityToSDQueue, &data_wrapper, 0) != pdTRUE)
+        {
+          pr_debug("failed to send parity to sd queue");
+          delete data_wrapper;
+        }
       }
       else
       {
@@ -326,17 +355,13 @@ namespace sd_mmc
   // TaskHandleはwriteDataToSDTaskHandle
   IRAM_ATTR void writeDataToSD(void *pvParameter)
   {
-    static QueueSetHandle_t xQueueSet;
-    xQueueSet = xQueueCreateSet(2 * sizeof(char *));
-    xQueueAddToSet(ParityToSDQueue, xQueueSet);
-    xQueueAddToSet(LogToSDQueue, xQueueSet);
     for (;;)
     {
-      char *data;
-      QueueHandle_t queue = xQueueSelectFromSet(xQueueSet, portMAX_DELAY);
-      if (queue == ParityToSDQueue)
+      SD_Data *data_wrapper;
+      if (xQueueReceive(ParityToSDQueue, &data_wrapper, portMAX_DELAY) == pdTRUE)
       {
-        if (xQueueReceive(ParityToSDQueue, &data, 0) == pdTRUE)
+        char *data = data_wrapper->data;
+        if (!(data_wrapper->is_log))
         {
 #if !defined(DEBUG) || defined(SD_FAST)
           int result = appendFile(SD_MMC, dataFile, data);
@@ -348,11 +373,6 @@ namespace sd_mmc
           pr_debug("%s", data);
         }
         else
-          pr_debug("failed to receive Queue");
-      }
-      else
-      {
-        if (xQueueReceive(LogToSDQueue, &data, 0) == pdTRUE)
         {
 #if !defined(DEBUG) || defined(SD_FAST)
           int result = appendFile(SD_MMC, logFile, data);
@@ -363,10 +383,12 @@ namespace sd_mmc
 #endif
           pr_debug("log: %s", data);
         }
-        else
-          pr_debug("failed to receive Queue");
+        delete[] data;
       }
-      delete[] data;
+      else
+        pr_debug("failed to receive Queue");
+
+      delete[] data_wrapper;
     }
   }
 }

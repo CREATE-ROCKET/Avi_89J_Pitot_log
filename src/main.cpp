@@ -35,6 +35,7 @@
 #include "debug.h"
 #include "task_queue.h"
 #include "task.h"
+#include "panic_wrapper.h"
 #include "interfaces/pitot.h"
 #include "interfaces/SD_fast.h"
 #include "interfaces/flash.h"
@@ -53,7 +54,7 @@ QueueHandle_t PitotToDistributeQueue;  // PitotからsendDataにデータを渡�
 QueueHandle_t DistributeToFlashQueue;  // sendDataからFlashにデータを渡すQueue
 QueueHandle_t DistributeToParityQueue; // sendDataからParityにデータを渡すQueue
 QueueHandle_t ParityToSDQueue;         // ParityからSDにデータを渡すQueue
-QueueHandle_t LogToSDQueue; // LogをSDに保存するタスク
+QueueHandle_t SDCloseNotifyQueue;      // DEBUGINPUTがRiseされたときにSDをCloseするためのQueue
 
 #ifdef DEBUG
 
@@ -128,6 +129,12 @@ void pr_reset_reason()
     break;
   }
 }
+
+void vApplicationStackOverflowHook(TaskHandle_t *xTask, portCHAR *taskname)
+{
+  error_log("Stack Over Flow Detected!!! %s", taskname);
+}
+
 #endif
 
 void setup()
@@ -154,8 +161,24 @@ void setup()
 #endif
   pinMode(led::LED1, OUTPUT);
   pinMode(led::LED2, OUTPUT);
+  pinMode(debug::DEBUG_INPUT, INPUT);
   digitalWrite(led::LED1, LOW);
   digitalWrite(led::LED2, HIGH);
+
+  if (ESP_RST_PANIC == esp_reset_reason())
+  {
+    char backtrace_str[1024];
+    uint16_t offset = 0;
+    offset += sprintf(backtrace_str + offset, "Backtrace: ");
+    for (uint8_t i = 0; i < STACK_DEPTH; i++)
+    {
+      if (s_exception_info.pc[i] != 0 && s_exception_info.sp[i] != 0)
+      {
+        offset += sprintf(backtrace_str + offset, "0x%08x:0x%08x ", (unsigned int)s_exception_info.pc[i], (unsigned int)s_exception_info.sp[i]);
+      }
+    }
+    pr_debug("%s", backtrace_str);
+  }
 
 #if !defined(DEBUG) || defined(SD_FAST)
   result = sd_mmc::init();
@@ -199,15 +222,9 @@ void setup()
   // TODO: 以前から記録されているflashのデータをmicroSDに書き込む
 
   PitotToDistributeQueue = xQueueCreate(20, sizeof(Data *));
-#if !defined(DEBUG) || defined(PITOT)
-  xTaskCreateUniversal(pitot::getPitotData, "getPitotDataTask", 2048, NULL, 8, &getPitotDataTaskHandle, PRO_CPU_NUM);
-#else
-  xTaskCreateUniversal(cmn_task::createData, "createDataForTest", 2048, NULL, 8, &getPitotDataTaskHandle, PRO_CPU_NUM);
-#endif
-
+  ParityToSDQueue = xQueueCreate(30, sizeof(char *));
   DistributeToFlashQueue = xQueueCreate(5, sizeof(u_int8_t *));
   DistributeToParityQueue = xQueueCreate(5, sizeof(Data *));
-  xTaskCreateUniversal(cmn_task::distribute_data, "distributeData", 8096, NULL, 7, &sendDataToEveryICTaskHandle, APP_CPU_NUM);
 
 #if !defined(DEBUG) || defined(SD_FAST)
   result = sd_mmc::makeNewFile();
@@ -215,12 +232,20 @@ void setup()
   {
     pr_debug("Can't make new file: %d", result);
   }
+  SDCloseNotifyQueue = xQueueCreate(1, sizeof(bool));
+  attachInterrupt(debug::DEBUG_INPUT, sd_mmc::onButton, RISING);
 #endif
   xTaskCreateUniversal(sd_mmc::makeParity, "makeParity", 8096, NULL, 6, &makeParityTaskHandle, APP_CPU_NUM);
 
-  ParityToSDQueue = xQueueCreate(10, sizeof(char *));
-  LogToSDQueue = xQueueCreate(10, sizeof(char*));
   xTaskCreateUniversal(sd_mmc::writeDataToSD, "writeDataToSD", 8096, NULL, 6, &writeDataToSDTaskHandle, APP_CPU_NUM);
+
+#if !defined(DEBUG) || defined(PITOT)
+  xTaskCreateUniversal(pitot::getPitotData, "getPitotDataTask", 2048, NULL, 8, &getPitotDataTaskHandle, PRO_CPU_NUM);
+#else
+  xTaskCreateUniversal(cmn_task::createData, "createDataForTest", 2048, NULL, 8, &getPitotDataTaskHandle, PRO_CPU_NUM);
+#endif
+
+  xTaskCreateUniversal(cmn_task::distribute_data, "distributeData", 8096, NULL, 7, &sendDataToEveryICTaskHandle, APP_CPU_NUM);
 
 #if !defined(DEBUG) || defined(SPIFLASH)
   xTaskCreateUniversal(flash::writeDataToFlash, "writeDataToFlash", 8096, NULL, 6, &writeDataToFlashTaskHandle, PRO_CPU_NUM);
@@ -231,23 +256,6 @@ void setup()
   digitalWrite(led::LED1, HIGH);
   digitalWrite(led::LED2, LOW);
   pr_debug("all done!!!");
-
-#ifdef DEBUG
-/*なんかdetectされて使えない 悲しい                                             \
-  char *writeDataToSDOverFlowHook = "writeDataToSD";                                         \
-  char *writeDataToFlashOverFlowHook = "writeDataToFlash";                                   \
-  char *SendDataByCanOverFlowHook = "SendDataByCan";                                         \
-  char *sendDataToEveryICOverFlowHook = "sendDataToEveryIC";                                 \
-  char *makeParityTaskOverFlowHook = "makeParityTask";                                       \
-  char *getPitotDataOverFlowHook = "getPitotData";                                           \
-  vApplicationStackOverflowHook(writeDataToSDTaskHandle, writeDataToSDOverFlowHook);         \
-  vApplicationStackOverflowHook(writeDataToFlashTaskHandle, writeDataToFlashOverFlowHook);   \
-  vApplicationStackOverflowHook(sendDataByCanTaskHandle, SendDataByCanOverFlowHook);         \
-  vApplicationStackOverflowHook(sendDataToEveryICTaskHandle, sendDataToEveryICOverFlowHook); \
-  vApplicationStackOverflowHook(makeParityTaskHandle, makeParityTaskOverFlowHook);           \
-  vApplicationStackOverflowHook(getPitotDataTaskHandle, getPitotDataOverFlowHook);           \
-*/
-#endif
 }
 
 void loop()

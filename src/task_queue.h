@@ -16,6 +16,6 @@ extern QueueHandle_t PitotToDistributeQueue; // PitotからsendDataにデータ�
 extern QueueHandle_t DistributeToFlashQueue; // sendDataからFlashにデータを渡すQueue
 extern QueueHandle_t DistributeToParityQueue; // sendDataからParityにデータを渡すQueue
 extern QueueHandle_t ParityToSDQueue;    // ParityからSDにデータを渡すQueue
-extern QueueHandle_t LogToSDQueue; // LogをSDに保存するタスク
+extern QueueHandle_t SDCloseNotifyQueue; // DEBUGINPUTがRiseされたときにSDをCloseするためのQueue
 
 #endif
