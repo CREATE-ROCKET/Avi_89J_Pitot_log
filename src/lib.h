@@ -3,28 +3,16 @@
 
 #include <stdint.h>
 
-#define DEBUG // debug時利用
+//#define DEBUG // debug時利用
 
 #ifdef DEBUG // debug時に機能のON/OFFを切り替え
 
-// #define CAN_MCP2562
-// #define PITOT
-// #define SD_FAST
-// #define SPIFLASH
+#define CAN_MCP2562
+#define PITOT
+#define SD_FAST
+#define SPIFLASH
 
 #endif
-
-// distribute_dataから一度に送信するデータの個数
-// SPIFlashが8bit* 256の配列単位で読み書きするため、
-// Pitot (float型(32bit) * 2) のデータを32個単位で読み書きすることにした。
-constexpr int numof_maxData = 32;
-// SPIFlashが読み書きするデータの単位
-constexpr int numof_writeData = 256;
-
-// 必要なバッファサイズを計算する
-// 各行が最大で21文字 + 終端の '\0'
-constexpr int bufferSize = 12 + 2 + 6 + 2 + 6 + 1;
-constexpr int AllbufferSize = numof_maxData * (bufferSize - 1)+ 1; //865
 
 namespace pitot
 { // ピトー管
@@ -82,9 +70,22 @@ struct SD_Data
 };
 
 #define STACK_DEPTH 32
-typedef struct {
+typedef struct
+{
+    int number;
     uint32_t pc[STACK_DEPTH];
     uint32_t sp[STACK_DEPTH];
 } ExceptionInfo_t;
+
+// SPIFlashが読み書きするデータの単位
+constexpr int numof_writeData = 256;
+// distribute_dataから一度に送信するデータの個数
+// SPIFlashが8bit* 256の配列単位で読み書きすることから算出する
+constexpr int numof_maxData = numof_writeData / (sizeof(Data) / sizeof(uint8_t));
+
+// 必要なバッファサイズを計算する
+// 各行が最大で21文字 + 終端の '\0'
+constexpr int bufferSize = 12 + 2 + 6 + 2 + 6 + 1;
+constexpr int AllbufferSize = numof_maxData * (bufferSize - 1) + 1; // 865
 
 #endif

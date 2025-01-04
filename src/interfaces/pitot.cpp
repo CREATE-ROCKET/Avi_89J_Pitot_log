@@ -40,10 +40,11 @@ namespace pitot
         {
             if (pres.Read())
             {
-                Data *pitotData = mem_controller::new_ptr();
+                Data *pitotData = new Data;
+                pitotData->time = static_cast<uint32_t>(esp_timer_get_time());
                 pitotData->pa = pres.pres_pa();
                 pitotData->temp = pres.die_temp_c();
-                if (xQueueSend(PitotToDistributeQueue, &pitotData, 0) != pdTRUE){
+                if (xQueueSend(PitotToDistributeQueue, &pitotData, 2) != pdTRUE){
                     error_log("%s(%d) failed to send queue date:%lu Queue:%d",__FILE__, __LINE__, millis(), uxQueueMessagesWaiting(PitotToDistributeQueue));
                     delete pitotData;
                 }

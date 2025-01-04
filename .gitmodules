@@ -1,9 +1,9 @@
 [submodule "lib/ms4525do"]
 	path = lib/ms4525do
 	url = https://github.com/bolderflight/ms4525do.git
-[submodule "lib/create"]
-	path = lib/create
-	url = https://github.com/CREATE-ROCKET/Avi_ESP_Libs.git
 [submodule "lib/can"]
 	path = lib/can
 	url = https://github.com/sandeepmistry/arduino-CAN.git
+[submodule "lib/create"]
+	path = lib/create
+	url = https://github.com/Natsu-B/Avi_ESP_Libs

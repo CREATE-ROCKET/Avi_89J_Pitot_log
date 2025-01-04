@@ -132,7 +132,7 @@ void pr_reset_reason()
 
 void vApplicationStackOverflowHook(TaskHandle_t *xTask, portCHAR *taskname)
 {
-  error_log("Stack Over Flow Detected!!! %s", taskname);
+  error_log("Stack Over Flow Detected!!!: %s", taskname);
 }
 
 #endif
@@ -219,8 +219,6 @@ void setup()
   }
   pr_debug("done all init");
 
-  // TODO: 以前から記録されているflashのデータをmicroSDに書き込む
-
   PitotToDistributeQueue = xQueueCreate(20, sizeof(Data *));
   ParityToSDQueue = xQueueCreate(30, sizeof(char *));
   DistributeToFlashQueue = xQueueCreate(5, sizeof(u_int8_t *));
@@ -242,10 +240,10 @@ void setup()
 #if !defined(DEBUG) || defined(PITOT)
   xTaskCreateUniversal(pitot::getPitotData, "getPitotDataTask", 2048, NULL, 8, &getPitotDataTaskHandle, PRO_CPU_NUM);
 #else
-  xTaskCreateUniversal(cmn_task::createData, "createDataForTest", 2048, NULL, 8, &getPitotDataTaskHandle, PRO_CPU_NUM);
+  xTaskCreateUniversal(task::createData, "createDataForTest", 2048, NULL, 8, &getPitotDataTaskHandle, PRO_CPU_NUM);
 #endif
 
-  xTaskCreateUniversal(cmn_task::distribute_data, "distributeData", 8096, NULL, 7, &sendDataToEveryICTaskHandle, APP_CPU_NUM);
+  xTaskCreateUniversal(task::distribute_data, "distributeData", 8096, NULL, 7, &sendDataToEveryICTaskHandle, APP_CPU_NUM);
 
 #if !defined(DEBUG) || defined(SPIFLASH)
   xTaskCreateUniversal(flash::writeDataToFlash, "writeDataToFlash", 8096, NULL, 6, &writeDataToFlashTaskHandle, PRO_CPU_NUM);

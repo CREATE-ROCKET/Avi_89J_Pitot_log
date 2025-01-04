@@ -5,14 +5,15 @@
 #include "debug.h"
 #include "task_queue.h"
 #include "memory_controller.h"
+#include "common_task.h"
 
+File dataFileHandle;
+File logFileHandle;
 #if !defined(DEBUG) || defined(SD_FAST)
 
 String dataFile;
 String logFile;
-TaskHandle_t SDcloseTaskHandle;
-File dataFileHandle;
-File logFileHandle;
+portMUX_TYPE write_mutex = portMUX_INITIALIZER_UNLOCKED;
 
 namespace sd_mmc
 {
@@ -249,7 +250,7 @@ namespace sd_mmc
     dataFile += number_path;
     logFile += number_path;
     pr_debug("dataFile: %s, logFile: %s", dataFile.c_str(), logFile.c_str());
-    dataFileHandle = SD_MMC.open(dataFile, FILE_WRITE);
+    File dataFileHandle = SD_MMC.open(dataFile, FILE_WRITE);
     if (!dataFileHandle)
     {
       pr_debug("failed to open file");
@@ -260,65 +261,22 @@ namespace sd_mmc
       pr_debug("failed to write file");
       return 11;
     }
-    logFileHandle = SD_MMC.open(logFile, FILE_WRITE);
+    File logFileHandle = SD_MMC.open(logFile, FILE_WRITE);
     dataFileHandle.close();
     logFileHandle.close();
     return 0;
   }
 
-  void IRAM_ATTR SDcloseTask(void *pvParameter)
-  {
-    vTaskSuspend(writeDataToSDTaskHandle);
-    vTaskDelete(writeDataToSDTaskHandle);
-    //    SD_MMC.close();
-    vTaskDelete(NULL);
-  }
-
   void IRAM_ATTR onButton()
   {
-    xTaskCreateUniversal(sd_mmc::SDcloseTask, "SDcloseTask", 2048, NULL, 9, &SDcloseTaskHandle, APP_CPU_NUM);
+    portENTER_CRITICAL_ISR(&write_mutex);
+    cmn_task::blinkLED_start(1000, 1);
   }
 }
 #endif
 
 namespace sd_mmc
 {
-  // Data型の配列をchar型に変換する
-  // newしているのでdelete[]等必要
-  char *DataToChar(Data pitotData[numof_maxData])
-  {
-    // バッファを動的に確保
-    char *buffer = new char[AllbufferSize];
-    if (buffer == nullptr)
-    {
-      return nullptr; // メモリ確保失敗時はnullptrを返す
-    }
-
-    size_t offset = 0;
-
-    for (int i = 0; i < numof_maxData; ++i)
-    {
-      // snprintfを使って1行をフォーマット
-      int written = snprintf(
-          buffer + offset,
-          bufferSize,
-          "%u, %g, %g\n",
-          pitotData[i].time,
-          pitotData[i].pa,
-          pitotData[i].temp);
-
-      // バッファオーバーフローを防止
-      if (written < 0 || offset + written >= AllbufferSize)
-      {
-        delete[] buffer; // メモリを解放して失敗を返す
-        return nullptr;
-      }
-
-      offset += written;
-    }
-    return buffer;
-  }
-
   IRAM_ATTR void makeParity(void *pvParameter)
   {
     while (true)
@@ -327,14 +285,14 @@ namespace sd_mmc
       // Queueにデータがくるまで待つ
       if (xQueueReceive(DistributeToParityQueue, &pitotData, portMAX_DELAY) == pdTRUE)
       {
-        char *data = DataToChar(pitotData);
+        char *data = cmn_task::DataToChar(pitotData);
         // pr_debug("%s(%d) :%s", __FILE__, __LINE__, data);
         if (!data)
         {
           pr_debug("nullptr found");
           continue;
         }
-        // mem_controller::delete_ptr(pitotData);
+        mem_controller::delete_ptr(pitotData);
         SD_Data *data_wrapper = new SD_Data;
         data_wrapper->is_log = false;
         data_wrapper->data = data;
@@ -350,6 +308,7 @@ namespace sd_mmc
       }
     }
   }
+
   // makeParityからchar型のデータを受け取り、それを書き込むタスク
   // appendFileでopenとcloseを逐一やるため遅い可能性が高い
   // TaskHandleはwriteDataToSDTaskHandle
@@ -360,6 +319,9 @@ namespace sd_mmc
       SD_Data *data_wrapper;
       if (xQueueReceive(ParityToSDQueue, &data_wrapper, portMAX_DELAY) == pdTRUE)
       {
+#if !defined(DEBUG) || defined(SD_FAST)
+        portENTER_CRITICAL(&write_mutex);
+#endif
         char *data = data_wrapper->data;
         if (!(data_wrapper->is_log))
         {
@@ -384,6 +346,9 @@ namespace sd_mmc
           pr_debug("log: %s", data);
         }
         delete[] data;
+#if !defined(DEBUG) || defined(SD_FAST)
+        portEXIT_CRITICAL(&write_mutex);
+#endif
       }
       else
         pr_debug("failed to receive Queue");

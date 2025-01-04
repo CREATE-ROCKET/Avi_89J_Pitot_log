@@ -30,7 +30,6 @@
         pr_debug("failed to make error log");                             \
         pr_debug(format, ##__VA_ARGS__);                                  \
         break;                                                            \
-        ;                                                                 \
       }                                                                   \
     }                                                                     \
     SD_Data *data_wrapper = new SD_Data;                                  \
