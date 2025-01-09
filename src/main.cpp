@@ -230,7 +230,6 @@ void setup()
   {
     pr_debug("Can't make new file: %d", result);
   }
-  SDCloseNotifyQueue = xQueueCreate(1, sizeof(bool));
   attachInterrupt(debug::DEBUG_INPUT, sd_mmc::onButton, RISING);
 #endif
   xTaskCreateUniversal(sd_mmc::makeParity, "makeParity", 8096, NULL, 6, &makeParityTaskHandle, APP_CPU_NUM);

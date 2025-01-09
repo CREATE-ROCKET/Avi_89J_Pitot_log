@@ -58,17 +58,17 @@ namespace sd_mmc
   }
 #endif
 
-  int appendFile(fs::FS &fs, String path, const char *message)
+  int appendFile(String path, const char *message)
   {
     pr_debug("Appending to file: %s", path.c_str());
     int64_t sd_write_time = esp_timer_get_time();
-    File file = fs.open(path, FILE_APPEND);
+    File file = SD_MMC.open(path, FILE_APPEND);
     if (!file)
     {
       pr_debug("Failed to open file for appending");
       return 1; // failed to open file
     }
-    if (file.print(message))
+    if (!file.print(message))
     {
       pr_debug("data append failed");
       return 2; // failed to append file
@@ -140,34 +140,10 @@ namespace sd_mmc
     pr_debug("making new file....");
     int number; // dataN.csv、 logN.csvのNの値
 
-    File root = SD_MMC.open("/");
-    bool is_found_number = false; // number.txtがあるかどうか
-    bool is_found_data = false;   // dataフォルダがあるかどうか
-    bool is_found_log = false;    // logフォルダがあるかどうか
-    bool isDir;
-    for (;;)
-    {
-      String filename = root.getNextFileName(&isDir);
-      if (filename = "") // 最後までいった or ファイルが1つもない
-        break;
-      if (isDir)
-      { // ディレクトリなら
-        if (filename == "data")
-        {
-          is_found_data = true;
-        }
-        if (filename == "log")
-        {
-          is_found_log = true;
-        }
-      }
-      else if (filename == "number.txt")
-      { // ファイルなら
-        is_found_number == true;
-      }
-    }
-
-    if (!is_found_number)
+    File file = SD_MMC.open("/number.txt");
+    int result = file.read();
+    file.close();
+    if (result == -1)
     {
       pr_debug("Cannot find number.txt assume the SD is init. creating...");
       number = 0;
@@ -183,6 +159,19 @@ namespace sd_mmc
         return 2;
       }
       file.close();
+
+      pr_debug("Can't find data dir. creating...");
+      if (!SD_MMC.mkdir("/data"))
+      {
+        pr_debug("Failed to create data dir");
+        return 8;
+      }
+      pr_debug("Can't find log dir. creating...");
+      if (!SD_MMC.mkdir("/log"))
+      {
+        pr_debug("Failed to create log dir");
+        return 9;
+      }
     }
     else
     {
@@ -217,30 +206,12 @@ namespace sd_mmc
         pr_debug("Failed to open file!!!");
         return 6; // open error
       }
-      if (!(file1.print(number + 1)))
+      if (!file1.print(number + 1))
       {
         pr_debug("Failed to write file!!!");
         return 7;
       }
       file1.close();
-    }
-    if (!is_found_data)
-    {
-      pr_debug("Can't find data dir. creating...");
-      if (!SD_MMC.mkdir("/data"))
-      {
-        pr_debug("Failed to create data dir");
-        return 8;
-      }
-    }
-    if (!is_found_log)
-    {
-      pr_debug("Can't find log dir. creating...");
-      if (!SD_MMC.mkdir("/log"))
-      {
-        pr_debug("Failed to create log dir");
-        return 9;
-      }
     }
 
     // dataN.csvとlogN.csvを作成する
@@ -256,7 +227,7 @@ namespace sd_mmc
       pr_debug("failed to open file");
       return 10;
     }
-    if (dataFileHandle.print("time, pascal, temperature\n"))
+    if (!dataFileHandle.print("time, pascal, temperature\n"))
     {
       pr_debug("failed to write file");
       return 11;
@@ -270,6 +241,7 @@ namespace sd_mmc
   void IRAM_ATTR onButton()
   {
     portENTER_CRITICAL_ISR(&write_mutex);
+    SD_MMC.end();
     cmn_task::blinkLED_start(1000, 1);
   }
 }
@@ -320,14 +292,14 @@ namespace sd_mmc
       if (xQueueReceive(ParityToSDQueue, &data_wrapper, portMAX_DELAY) == pdTRUE)
       {
 #if !defined(DEBUG) || defined(SD_FAST)
-        portENTER_CRITICAL(&write_mutex);
+        //portENTER_CRITICAL(&write_mutex);
 #endif
         char *data = data_wrapper->data;
         if (!(data_wrapper->is_log))
         {
 #if !defined(DEBUG) || defined(SD_FAST)
-          int result = appendFile(SD_MMC, dataFile, data);
-          if (result)
+          int result = appendFile(dataFile, data);
+          if (!result)
           {
             pr_debug("failed to write SD: %d", result);
           }
@@ -337,7 +309,7 @@ namespace sd_mmc
         else
         {
 #if !defined(DEBUG) || defined(SD_FAST)
-          int result = appendFile(SD_MMC, logFile, data);
+          int result = appendFile(logFile, data);
           if (result)
           {
             pr_debug("failed to write SD: %d", result);
@@ -347,7 +319,7 @@ namespace sd_mmc
         }
         delete[] data;
 #if !defined(DEBUG) || defined(SD_FAST)
-        portEXIT_CRITICAL(&write_mutex);
+        //portEXIT_CRITICAL(&write_mutex);
 #endif
       }
       else

@@ -14,6 +14,7 @@
 SPICREATE::SPICreate SPIC1;
 Flash flash1;
 
+const int data_size = numof_maxData * (sizeof(Data) / sizeof(uint8_t));
 const int FLASH_BLOCK_SIZE = 0x100;
 
 // Flashから読み取った値をData型に変換する
@@ -38,12 +39,13 @@ namespace flash
             flash1.read(counter, tmp);
             for (int i = 0; i < 256; i++)
             {
-                if (tmp[i] != 0)
+                if (tmp[i] != 255)
                 {
                     is_remaining = true;
-                    for (int j = 0; j < numof_maxData; j++)
+                    for (int j = 0; j < data_size; j++)
                     {
                         pitotData.Uint8Data[j] = tmp[j];
+                        pr_debug("%u, ", tmp[i]);
                     }
                     char *data = cmn_task::DataToChar(pitotData.pitotData);
                     if (!data)
@@ -64,26 +66,25 @@ namespace flash
     // setup内で実行 エラー処理なし
     int init()
     {
-        digitalWrite(CS, HIGH);
-        SPIC1.begin(CS, CLK, MISO, MOSI);
-        flash1.begin(&SPIC1, CS, SPIFREQ);
-        int result = get_old_data();
-        if (result)
-        {
-            pr_debug("Can't get old flash data");
-            return 1;
-        }
-#ifdef DEBUG
-        pr_debug("In DEBUG mode flash will erased");
-        flash1.erase();
-#endif
+         digitalWrite(CS, HIGH);
+         SPIC1.begin(CS, CLK, MISO, MOSI);
+         flash1.begin(&SPIC1, CS, SPIFREQ);
+         int result = get_old_data();
+         if (result)
+         {
+             pr_debug("Can't get old flash data");
+             return 1;
+         }
+ #ifdef DEBUG
+         pr_debug("In DEBUG mode flash will erased");
+         // flash1.erase();
+ #endif
         return 0;
     }
 
     void IRAM_ATTR writeDataToFlash(void *pvParameter)
     {
         int counter = 0;
-        const int data_size = numof_maxData * sizeof(uint8_t);
         pr_debug("flash write data size: %d", data_size);
 #ifdef DEBUG
         configASSERT(256 > data_size);
@@ -91,7 +92,7 @@ namespace flash
         while (true)
         {
             // numof_maxData個だけDataが送られてくるので、あまりを0埋めして保存
-            uint8_t tmp[data_size];
+            uint8_t *tmp = nullptr;
             // Queueにデータがくるまで待つ
             if (xQueueReceive(DistributeToFlashQueue, &tmp, portMAX_DELAY) == pdTRUE)
             {
@@ -104,13 +105,20 @@ namespace flash
                     }
                     else
                     {
-                        pitotData[i] = 0;
+                        pitotData[i] = 255;
                     }
                 }
-                flash1.write(counter, pitotData);
+                // flash1.write(counter, pitotData);
+                /*
+                PitotDataUnion change;
                 for (int i = 0; i < 256; i++)
-                    pr_debug("%d", pitotData[i]);
-                mem_controller::delete_ptr(pitotData);
+                {
+                    change.Uint8Data[i] = pitotData[i];
+                }
+                char *data = cmn_task::DataToChar(change.pitotData);
+                pr_debug("flash data: %s", data);
+                */
+                mem_controller::delete_ptr(tmp);
                 counter += FLASH_BLOCK_SIZE;
             }
             else

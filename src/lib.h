@@ -3,12 +3,12 @@
 
 #include <stdint.h>
 
-//#define DEBUG // debug時利用
+#define DEBUG // debug時利用
 
 #ifdef DEBUG // debug時に機能のON/OFFを切り替え
 
-#define CAN_MCP2562
-#define PITOT
+// #define CAN_MCP2562
+// #define PITOT
 #define SD_FAST
 #define SPIFLASH
 
@@ -86,6 +86,6 @@ constexpr int numof_maxData = numof_writeData / (sizeof(Data) / sizeof(uint8_t))
 // 必要なバッファサイズを計算する
 // 各行が最大で21文字 + 終端の '\0'
 constexpr int bufferSize = 12 + 2 + 6 + 2 + 6 + 1;
-constexpr int AllbufferSize = numof_maxData * (bufferSize - 1) + 1; // 865
+constexpr int AllbufferSize = 2 * numof_maxData * bufferSize + 1; // 865
 
 #endif
