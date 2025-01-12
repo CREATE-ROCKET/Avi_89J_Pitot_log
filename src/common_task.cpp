@@ -6,28 +6,114 @@
 
 Ticker blinker1;
 Ticker blinker2;
+Ticker blinker3;
 
 namespace cmn_task
 {
-    void blink1()
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+    void IRAM_ATTR blink()
+    {
+        digitalWrite(led::LED, !digitalRead(led::LED));
+    }
+    void IRAM_ATTR blink_pitot()
+    {
+        digitalWrite(led::LED_PITOT, !digitalRead(led::LED_PITOT));
+    }
+    void IRAM_ATTR blink_sd()
+    {
+        digitalWrite(led::LED_SD, !digitalRead(led::LED_SD));
+    }
+
+    // LEDを点滅させる
+    // LEDには1or２or3を指定可能で2と3はそれぞれpitotとsd用、blinkIntervalはms指定で0だと連続点灯になる
+    void blinkLED_start(int led, int blinkInterval)
+    {
+        switch (led)
+        {
+        case 1:
+            if (blinker1.active())
+                blinkLED_stop(led);
+            if (!blinkInterval)
+            {
+                digitalWrite(led::LED, HIGH);
+                break;
+            }
+            blinker1.attach_ms(blinkInterval, blink);
+            break;
+        case 2:
+            if (blinker2.active())
+                blinkLED_stop(led);
+            if (!blinkInterval)
+            {
+                digitalWrite(led::LED_PITOT, HIGH);
+                break;
+            }
+            blinker2.attach_ms(blinkInterval, blink_pitot);
+            break;
+        case 3:
+            if (blinker3.active())
+                blinkLED_stop(led);
+            if (!blinkInterval)
+            {
+                digitalWrite(led::LED_SD, HIGH);
+                break;
+            }
+            blinker3.attach_ms(blinkInterval, blink_sd);
+            break;
+        default:
+            pr_debug("wrong led name specified!!!");
+            break;
+        }
+    }
+
+    // ledの点滅をやめる
+    void blinkLED_stop(int led)
+    {
+        if (led == 1)
+        {
+            if (blinker1.active())
+                blinker1.detach();
+            digitalWrite(led::LED, LOW);
+        }
+        else if (led == 2)
+        {
+            if (blinker2.active())
+                blinker2.detach();
+            digitalWrite(led::LED_PITOT, LOW);
+        }
+        else if (led == 3)
+        {
+            if (blinker3.active())
+                blinker3.detach();
+            digitalWrite(led::LED_SD, LOW);
+        }
+        else
+        {
+            pr_debug("Wrong led name specified!!!")
+        }
+    }
+#elif CONFIG_IDF_TARGET_ESP32
+    void IRAM_ATTR blink1()
     {
         digitalWrite(led::LED1, !digitalRead(led::LED1));
     }
 
-    void blink2()
+    void IRAM_ATTR blink2()
     {
         digitalWrite(led::LED2, !digitalRead(led::LED2));
     }
 
     // LEDを点滅させる
-    // ledには1or2を指定可能で、blinkIntervalはms指定で0だと連続点灯となる。
+    // LEDには1or2を指定可能で、blinkIntervalはms指定で0だと連続点灯となる。
     void blinkLED_start(int led, int blinkInterval)
     {
         if (led == 1)
         {
+
+            if (blinker1.active())
+                blinkLED_stop(led);
             if (!blinkInterval)
             {
-                blinkLED_stop(led);
                 digitalWrite(led::LED1, HIGH);
                 return;
             }
@@ -35,9 +121,11 @@ namespace cmn_task
         }
         else if (led == 2)
         {
+
+            if (blinker2.active())
+                blinkLED_stop(led);
             if (!blinkInterval)
             {
-                blinkLED_stop(led);
                 digitalWrite(led::LED2, HIGH);
                 return;
             }
@@ -54,12 +142,14 @@ namespace cmn_task
     {
         if (led == 1)
         {
-            blinker1.detach();
+            if (blinker1.active())
+                blinker1.detach();
             digitalWrite(led::LED1, LOW);
         }
         else if (led == 2)
         {
-            blinker2.detach();
+            if (blinker2.active())
+                blinker2.detach();
             digitalWrite(led::LED2, LOW);
         }
         else
@@ -67,6 +157,7 @@ namespace cmn_task
             pr_debug("Wrong led name specified!!!")
         }
     }
+#endif
 
     // Data型の配列をchar型に変換する
     // newしているのでdelete[]等必要
@@ -103,5 +194,4 @@ namespace cmn_task
         }
         return buffer;
     }
-
 }

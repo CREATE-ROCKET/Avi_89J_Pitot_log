@@ -11,7 +11,11 @@
         "vector": "c",
         "string_view": "c",
         "initializer_list": "c",
-        "*.tcc": "c"
+        "*.tcc": "c",
+        "limits": "cpp",
+        "fstream": "cpp",
+        "sstream": "cpp",
+        "utility": "cpp"
     },
     "C_Cpp.errorSquiggles": "disabled",
     "cmake.ignoreCMakeListsMissing": true,

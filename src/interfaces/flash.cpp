@@ -108,7 +108,7 @@ namespace flash
                         pitotData[i] = 255;
                     }
                 }
-                // flash1.write(counter, pitotData);
+                //flash1.write(counter, pitotData);
                 /*
                 PitotDataUnion change;
                 for (int i = 0; i < 256; i++)

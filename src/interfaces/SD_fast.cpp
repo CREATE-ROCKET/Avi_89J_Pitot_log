@@ -13,7 +13,10 @@ File logFileHandle;
 
 String dataFile;
 String logFile;
-portMUX_TYPE write_mutex = portMUX_INITIALIZER_UNLOCKED;
+
+//  DEBUGINPUTがRiseされたとき、別のタスクに取られてwriteDataToSDTaskがこれ以上動作しないようにする
+volatile SemaphoreHandle_t semaphore_sd;
+TaskHandle_t GetSDSemaphoreHandle;
 
 namespace sd_mmc
 {
@@ -91,6 +94,7 @@ namespace sd_mmc
       pr_debug("No SD_MMC card attached");
       return 2; // sd none
     }
+    semaphore_sd = xSemaphoreCreateBinary();
 #ifdef DEBUG
     Serial.print("SD_MMC Card Type: ");
     if (cardType == CARD_MMC)
@@ -217,9 +221,10 @@ namespace sd_mmc
     // dataN.csvとlogN.csvを作成する
     dataFile = "/data/data";
     logFile = "/log/log";
-    String number_path = String(number) + ".csv";
-    dataFile += number_path;
-    logFile += number_path;
+    String number_path_csv = String(number) + ".csv";
+    String number_path_txt = String(number) + ".txt";
+    dataFile += number_path_csv;
+    logFile += number_path_txt;
     pr_debug("dataFile: %s, logFile: %s", dataFile.c_str(), logFile.c_str());
     File dataFileHandle = SD_MMC.open(dataFile, FILE_WRITE);
     if (!dataFileHandle)
@@ -238,11 +243,19 @@ namespace sd_mmc
     return 0;
   }
 
+  void IRAM_ATTR GetSDSemaphore(void *pvParameter)
+  {
+    xSemaphoreTake(semaphore_sd, portMAX_DELAY);
+    pr_debug("close SD");
+    SD_MMC.end();
+    //cmn_task::blinkLED_start(1, 1000);
+    vTaskDelete(NULL);
+  }
+
   void IRAM_ATTR onButton()
   {
-    portENTER_CRITICAL_ISR(&write_mutex);
-    SD_MMC.end();
-    cmn_task::blinkLED_start(1000, 1);
+    pr_debug("Debug pin rising");
+    xTaskCreateUniversal(sd_mmc::GetSDSemaphore, "microSD", 2048, NULL, 6, &GetSDSemaphoreHandle, PRO_CPU_NUM);
   }
 }
 #endif
@@ -292,7 +305,7 @@ namespace sd_mmc
       if (xQueueReceive(ParityToSDQueue, &data_wrapper, portMAX_DELAY) == pdTRUE)
       {
 #if !defined(DEBUG) || defined(SD_FAST)
-        //portENTER_CRITICAL(&write_mutex);
+        //xSemaphoreTake(semaphore_sd, portMAX_DELAY);
 #endif
         char *data = data_wrapper->data;
         if (!(data_wrapper->is_log))
@@ -310,7 +323,7 @@ namespace sd_mmc
         {
 #if !defined(DEBUG) || defined(SD_FAST)
           int result = appendFile(logFile, data);
-          if (result)
+          if (!result)
           {
             pr_debug("failed to write SD: %d", result);
           }
@@ -319,7 +332,7 @@ namespace sd_mmc
         }
         delete[] data;
 #if !defined(DEBUG) || defined(SD_FAST)
-        //portEXIT_CRITICAL(&write_mutex);
+        //xSemaphoreGive(semaphore_sd);
 #endif
       }
       else

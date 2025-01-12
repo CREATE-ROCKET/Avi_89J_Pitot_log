@@ -1,6 +1,7 @@
 #ifndef _lib_
 #define _lib_
 
+#include <sdkconfig.h> // どのboardを使ってるか
 #include <stdint.h>
 
 #define DEBUG // debug時利用
@@ -8,12 +9,61 @@
 #ifdef DEBUG // debug時に機能のON/OFFを切り替え
 
 // #define CAN_MCP2562
-// #define PITOT
+#define PITOT
 #define SD_FAST
 #define SPIFLASH
 
 #endif
 
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+
+namespace pitot
+{ // ピトー管
+    const int SDA = 4;
+    const int SCL = 5;
+}
+
+namespace flash
+{ // SPI flash
+    const int CS = 9;
+    const int CLK = 8;
+    const int MOSI = 18;
+    const int MISO = 3;
+}
+
+namespace sd_mmc
+{ // SD_MMC
+    const int CLK = 13;
+    const int DAT0 = 11;
+    const int DAT1 = 10;
+    const int DAT2 = 48;
+    const int DAT3 = 47;
+    const int CMD = 21;
+}
+
+namespace can
+{ // CAN
+    const int TX = 41;
+    const int RX = 42;
+    const int SELECT = 38;
+}
+
+namespace led
+{//LED
+    const int LED = 6;
+    const int LED_PITOT = 7;
+    const int LED_SD = 15;
+    const int LED_FLASH = 16;
+    const int LED_CAN = 17;
+}
+
+namespace debug
+{ // ピンヘッダ 両方ともPULLDOWNされてる
+    const int DEBUG_INPUT1 = 1; // SDのclose用に利用する
+    const int DEBUG_INPUT2 = 2;
+}
+
+#elif CONFIG_IDF_TARGET_ESP32
 namespace pitot
 { // ピトー管
     const int SDA = 21;
@@ -55,6 +105,10 @@ namespace debug
 { // debug用 SD_MMCのcloseに使うことにした PULLDOWN
     const int DEBUG_INPUT = 17;
 }
+
+#else
+#error "No supported board specified!!!"
+#endif
 
 struct Data
 {

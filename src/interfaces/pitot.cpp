@@ -30,6 +30,21 @@ namespace pitot
             return 3; // pres.begin() failed
         }
 
+        switch (pres.status())
+        {
+        case bfs::Ms4525do::Status::STATUS_GOOD:
+            break;
+        case bfs::Ms4525do::Status::STATUS_STALE_DATA:
+            error_log("pitot error: STATUS_STALE_DATA");
+            break;
+        case bfs::Ms4525do::Status::STATUS_FAULT:
+            error_log("pitot error: STATUS_FAULT");
+            break;
+        default:
+            pr_debug("code error");
+            break;
+        }
+
         return 0; // success
     }
 

@@ -142,6 +142,7 @@ void setup()
   int result;
   int error_num = 0; // 2以上ならcriticalな問題が発生したと判断してreboot
 #ifdef DEBUG
+
   Serial.begin(115200);
   while (!Serial)
   {
@@ -158,6 +159,7 @@ void setup()
   Serial.println("Debug mode is on.");
   pr_feature_fg();
   pr_reset_reason();
+
 #endif
   pinMode(led::LED1, OUTPUT);
   pinMode(led::LED2, OUTPUT);
@@ -230,7 +232,7 @@ void setup()
   {
     pr_debug("Can't make new file: %d", result);
   }
-  attachInterrupt(debug::DEBUG_INPUT, sd_mmc::onButton, RISING);
+  //attachInterrupt(digitalPinToInterrupt(debug::DEBUG_INPUT), sd_mmc::onButton, RISING);
 #endif
   xTaskCreateUniversal(sd_mmc::makeParity, "makeParity", 8096, NULL, 6, &makeParityTaskHandle, APP_CPU_NUM);
 
@@ -250,9 +252,10 @@ void setup()
 
   // TODO: CANも実装する
 
+  pr_debug("all done!!!");
+
   digitalWrite(led::LED1, HIGH);
   digitalWrite(led::LED2, LOW);
-  pr_debug("all done!!!");
 }
 
 void loop()

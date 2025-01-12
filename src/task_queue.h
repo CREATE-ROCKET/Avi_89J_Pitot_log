@@ -17,8 +17,4 @@ extern QueueHandle_t DistributeToFlashQueue;  // sendDataからFlashにデータ
 extern QueueHandle_t DistributeToParityQueue; // sendDataからParityにデータを渡すQueue
 extern QueueHandle_t ParityToSDQueue;         // ParityからSDにデータを渡すQueue
 
-// mutex
-//  DEBUGINPUTがRiseされたとき、別のタスクに取られてwriteDataToSDTaskがこれ以上動作しないようにする
-extern portMUX_TYPE write_mutex;
-
 #endif
