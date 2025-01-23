@@ -7,4 +7,5 @@
 
 RTC_NOINIT_ATTR static ExceptionInfo_t s_exception_info;
 
+
 #endif

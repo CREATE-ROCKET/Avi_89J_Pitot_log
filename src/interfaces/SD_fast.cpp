@@ -4,7 +4,6 @@
 #include "lib.h"
 #include "debug.h"
 #include "task_queue.h"
-#include "memory_controller.h"
 #include "common_task.h"
 
 File dataFileHandle;
@@ -13,6 +12,7 @@ File logFileHandle;
 
 String dataFile;
 String logFile;
+bool run_close_task = false;
 
 //  DEBUGINPUTがRiseされたとき、別のタスクに取られてwriteDataToSDTaskがこれ以上動作しないようにする
 volatile SemaphoreHandle_t semaphore_sd;
@@ -95,6 +95,7 @@ namespace sd_mmc
       return 2; // sd none
     }
     semaphore_sd = xSemaphoreCreateBinary();
+    xSemaphoreGive(semaphore_sd);
 #ifdef DEBUG
     Serial.print("SD_MMC Card Type: ");
     if (cardType == CARD_MMC)
@@ -248,14 +249,18 @@ namespace sd_mmc
     xSemaphoreTake(semaphore_sd, portMAX_DELAY);
     pr_debug("close SD");
     SD_MMC.end();
-    //cmn_task::blinkLED_start(1, 1000);
+    cmn_task::blinkLED_start(1, 1000);
     vTaskDelete(NULL);
   }
 
   void IRAM_ATTR onButton()
   {
-    pr_debug("Debug pin rising");
-    xTaskCreateUniversal(sd_mmc::GetSDSemaphore, "microSD", 2048, NULL, 6, &GetSDSemaphoreHandle, PRO_CPU_NUM);
+    if (!run_close_task)
+    {
+      pr_debug("Debug pin rising");
+      xTaskCreateUniversal(sd_mmc::GetSDSemaphore, "microSD", 2048, NULL, 6, &GetSDSemaphoreHandle, PRO_CPU_NUM);
+      run_close_task = true;
+    }
   }
 }
 #endif
@@ -277,10 +282,11 @@ namespace sd_mmc
           pr_debug("nullptr found");
           continue;
         }
-        mem_controller::delete_ptr(pitotData);
+        delete[] pitotData;
         SD_Data *data_wrapper = new SD_Data;
         data_wrapper->is_log = false;
         data_wrapper->data = data;
+        delete[] data;
         if (xQueueSend(ParityToSDQueue, &data_wrapper, 0) != pdTRUE)
         {
           pr_debug("failed to send parity to sd queue");
@@ -305,34 +311,35 @@ namespace sd_mmc
       if (xQueueReceive(ParityToSDQueue, &data_wrapper, portMAX_DELAY) == pdTRUE)
       {
 #if !defined(DEBUG) || defined(SD_FAST)
-        //xSemaphoreTake(semaphore_sd, portMAX_DELAY);
-#endif
-        char *data = data_wrapper->data;
-        if (!(data_wrapper->is_log))
+        if (xSemaphoreTake(semaphore_sd, 0) == pdTRUE)
         {
-#if !defined(DEBUG) || defined(SD_FAST)
-          int result = appendFile(dataFile, data);
-          if (!result)
-          {
-            pr_debug("failed to write SD: %d", result);
-          }
 #endif
-          pr_debug("%s", data);
-        }
-        else
-        {
-#if !defined(DEBUG) || defined(SD_FAST)
-          int result = appendFile(logFile, data);
-          if (!result)
+          char *data = data_wrapper->data;
+          if (!(data_wrapper->is_log))
           {
-            pr_debug("failed to write SD: %d", result);
-          }
-#endif
-          pr_debug("log: %s", data);
-        }
-        delete[] data;
 #if !defined(DEBUG) || defined(SD_FAST)
-        //xSemaphoreGive(semaphore_sd);
+            int result = appendFile(dataFile, data);
+            if (!result)
+            {
+              pr_debug("failed to write SD: %d", result);
+            }
+#endif
+            pr_debug("%s", data);
+          }
+          else
+          {
+#if !defined(DEBUG) || defined(SD_FAST)
+            int result = appendFile(logFile, data);
+            if (!result)
+            {
+              pr_debug("failed to write SD: %d", result);
+            }
+#endif
+            pr_debug("log: %s", data);
+          }
+#if !defined(DEBUG) || defined(SD_FAST)
+        }
+        xSemaphoreGive(semaphore_sd);
 #endif
       }
       else

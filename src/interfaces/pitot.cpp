@@ -3,7 +3,6 @@
 #include "debug.h"
 #include <ms4525do.h>
 #include "task_queue.h"
-#include "memory_controller.h"
 
 #if !defined(DEBUG) || defined(PITOT)
 
@@ -67,7 +66,7 @@ namespace pitot
             }
             else
             {
-                vTaskDelay(1);
+                vTaskDelay(1 / portTICK_PERIOD_MS);
             }
         }
     }

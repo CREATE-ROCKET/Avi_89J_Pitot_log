@@ -3,7 +3,6 @@
 #include "lib.h"
 #include "debug.h"
 #include "task_queue.h"
-#include "memory_controller.h"
 
 namespace task
 {
@@ -12,7 +11,7 @@ namespace task
     // すべてで利用されたあとdeleteする
     void IRAM_ATTR distribute_data(void *pvParameter)
     {
-        Data *pitotData = mem_controller::new_ptr();
+        Data *pitotData = new Data[numof_maxData];
         int counter = 0;
         while (true)
         {
@@ -23,6 +22,8 @@ namespace task
                 pitotData[counter] = *tmp_data;
                 ++counter;
                 delete tmp_data;
+                xQueueSend(DistributeToCanQueue, &tmp_data, 0);
+
                 if (counter >= numof_maxData) // 一度に送信するタスク
                 {
                     counter = 0;
@@ -30,7 +31,10 @@ namespace task
 #ifdef SPIFLASH
                     xQueueSend(DistributeToFlashQueue, &pitotData, 0);
 #endif
-                    pitotData = mem_controller::new_ptr();
+#ifdef CAN_MCP2562
+                    // xQueueSend(DistributeToCanQueue, &pitotData, 0);
+#endif
+                    pitotData = new  Data[numof_maxData];
                 }
             }
             else

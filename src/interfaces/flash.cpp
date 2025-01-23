@@ -4,7 +4,6 @@
 #include "S25FL127S 1.0.0/src/SPIflash.h"
 #include <Arduino.h>
 #include "task_queue.h"
-#include "memory_controller.h"
 #include "common_task.h"
 
 #if !defined(DEBUG) || defined(SPIFLASH)
@@ -66,19 +65,18 @@ namespace flash
     // setup内で実行 エラー処理なし
     int init()
     {
-         digitalWrite(CS, HIGH);
-         SPIC1.begin(CS, CLK, MISO, MOSI);
-         flash1.begin(&SPIC1, CS, SPIFREQ);
-         int result = get_old_data();
-         if (result)
-         {
-             pr_debug("Can't get old flash data");
-             return 1;
-         }
- #ifdef DEBUG
-         pr_debug("In DEBUG mode flash will erased");
-         // flash1.erase();
- #endif
+        SPIC1.begin(CS, CLK, MISO, MOSI);
+        flash1.begin(&SPIC1, CS, SPIFREQ);
+        int result = get_old_data();
+        if (result)
+        {
+            pr_debug("Can't get old flash data");
+            return 1;
+        }
+#ifdef DEBUG
+        pr_debug("In DEBUG mode flash will erased");
+        flash1.erase();
+#endif
         return 0;
     }
 
@@ -108,7 +106,7 @@ namespace flash
                         pitotData[i] = 255;
                     }
                 }
-                //flash1.write(counter, pitotData);
+                flash1.write(counter, pitotData);
                 /*
                 PitotDataUnion change;
                 for (int i = 0; i < 256; i++)
@@ -118,7 +116,7 @@ namespace flash
                 char *data = cmn_task::DataToChar(change.pitotData);
                 pr_debug("flash data: %s", data);
                 */
-                mem_controller::delete_ptr(tmp);
+                delete[] tmp;
                 counter += FLASH_BLOCK_SIZE;
             }
             else
