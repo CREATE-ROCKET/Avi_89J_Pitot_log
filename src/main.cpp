@@ -36,6 +36,7 @@
 #include "task_queue.h"
 #include "task.h"
 #include "panic_wrapper.h"
+#include "common_task.h"
 #include "interfaces/pitot.h"
 #include "interfaces/SD_fast.h"
 #include "interfaces/flash.h"
@@ -54,7 +55,7 @@ QueueHandle_t PitotToDistributeQueue;  // PitotからsendDataにデータを渡�
 QueueHandle_t DistributeToFlashQueue;  // sendDataからFlashにデータを渡すQueue
 QueueHandle_t DistributeToParityQueue; // sendDataからParityにデータを渡すQueue
 QueueHandle_t ParityToSDQueue;         // ParityからSDにデータを渡すQueue
-QueueHandle_t SDCloseNotifyQueue;      // DEBUGINPUTがRiseされたときにSDをCloseするためのQueue
+QueueHandle_t DistributeToCanQueue;    // sendDataからCanにデータを渡すQueue
 
 #ifdef DEBUG
 
@@ -161,13 +162,36 @@ void setup()
   pr_reset_reason();
 
 #endif
+#if IS_S3
+  pinMode(led::LED, OUTPUT);
+  pinMode(led::LED_PITOT, OUTPUT);
+  pinMode(led::LED_FLASH, OUTPUT);
+  pinMode(led::LED_SD, OUTPUT);
+  pinMode(led::LED_CAN, OUTPUT);
+  pinMode(debug::DEBUG_INPUT1, INPUT);
+  pinMode(debug::DEBUG_INPUT2, INPUT);
+  digitalWrite(led::LED, HIGH);
+  digitalWrite(led::LED_PITOT, LOW);
+  digitalWrite(led::LED_SD, LOW);
+  digitalWrite(led::LED_FLASH, LOW);
+  digitalWrite(led::LED_CAN, LOW);
+#else
   pinMode(led::LED1, OUTPUT);
   pinMode(led::LED2, OUTPUT);
   pinMode(debug::DEBUG_INPUT, INPUT);
   digitalWrite(led::LED1, LOW);
   digitalWrite(led::LED2, HIGH);
+#endif
 
-  if (ESP_RST_PANIC == esp_reset_reason())
+  // Queue作成 error_logを利用したいので上に置いてる
+  PitotToDistributeQueue = xQueueCreate(20, sizeof(Data *));
+  ParityToSDQueue = xQueueCreate(30, sizeof(char *));
+  DistributeToFlashQueue = xQueueCreate(5, sizeof(u_int8_t *));
+  DistributeToParityQueue = xQueueCreate(5, sizeof(Data *));
+  DistributeToCanQueue = xQueueCreate(5, sizeof(uint8_t*));
+
+  error_t why_reset = esp_reset_reason();
+  if (ESP_RST_PANIC == why_reset)
   {
     char backtrace_str[1024];
     uint16_t offset = 0;
@@ -179,7 +203,12 @@ void setup()
         offset += sprintf(backtrace_str + offset, "0x%08x:0x%08x ", (unsigned int)s_exception_info.pc[i], (unsigned int)s_exception_info.sp[i]);
       }
     }
-    pr_debug("%s", backtrace_str);
+    error_log("esp was reset due to panic\nBacktrace: %s\n", backtrace_str);
+  }
+  else if (ESP_RST_SW == why_reset)
+  {
+    cmn_task::blinkLED_start(1, 1000);
+    error_log("restart due to esp_restart at %lldms", esp_timer_get_time);
   }
 
 #if !defined(DEBUG) || defined(SD_FAST)
@@ -189,42 +218,55 @@ void setup()
     pr_debug("SD_init failed: %d", result);
     ++error_num;
   }
+#if IS_S3
+  else
+    digitalWrite(led::LED_SD, HIGH);
 #endif
+#endif
+
 #if !defined(DEBUG) || defined(SPIFLASH)
   result = flash::init();
   if (result)
   {
-    pr_debug("flash_init failed: %d", result);
+    error_log("flash_init failed: %d", result);
     ++error_num;
   }
+#if IS_S3
+  else
+    digitalWrite(led::LED_FLASH, HIGH);
 #endif
+#endif
+
 #if !defined(DEBUG) || defined(PITOT)
   result = pitot::init();
   if (result)
   {
-    pr_debug("pitot_init failed: %d", result);
+    error_log("pitot_init failed: %d", result);
     error_num += 2;
   }
+#if IS_S3
+  else
+    digitalWrite(led::LED_PITOT, HIGH);
+#endif
 #endif
 #if !defined(DEBUG) || defined(CAN_MCP2562)
   result = can::init();
   if (result)
   {
-    pr_debug("can_init failed: %d", result);
+    error_log("can_init failed: %d", result);
   }
+#if IS_S3
+  else
+    digitalWrite(led::LED_CAN, HIGH);
+#endif
 #endif
 
   if (error_num >= 2)
   {
-    pr_debug("fatal error occurred!! rebooting ....");
+    error_log("fatal error occurred!! rebooting ....");
     ESP.restart(); // 再起動する
   }
   pr_debug("done all init");
-
-  PitotToDistributeQueue = xQueueCreate(20, sizeof(Data *));
-  ParityToSDQueue = xQueueCreate(30, sizeof(char *));
-  DistributeToFlashQueue = xQueueCreate(5, sizeof(u_int8_t *));
-  DistributeToParityQueue = xQueueCreate(5, sizeof(Data *));
 
 #if !defined(DEBUG) || defined(SD_FAST)
   result = sd_mmc::makeNewFile();
@@ -232,7 +274,7 @@ void setup()
   {
     pr_debug("Can't make new file: %d", result);
   }
-  //attachInterrupt(digitalPinToInterrupt(debug::DEBUG_INPUT), sd_mmc::onButton, RISING);
+  attachInterrupt(digitalPinToInterrupt(debug::DEBUG_INPUT), sd_mmc::onButton, RISING);
 #endif
   xTaskCreateUniversal(sd_mmc::makeParity, "makeParity", 8096, NULL, 6, &makeParityTaskHandle, APP_CPU_NUM);
 
@@ -250,12 +292,18 @@ void setup()
   xTaskCreateUniversal(flash::writeDataToFlash, "writeDataToFlash", 8096, NULL, 6, &writeDataToFlashTaskHandle, PRO_CPU_NUM);
 #endif
 
-  // TODO: CANも実装する
+#if !defined(DEBUG) || defined(CAN_MCP2562)
+  xTaskCreateUniversal(can::sendDataByCAN, "sendDataByCAN", 8096, NULL, 6, &sendDataByCanTaskHandle, PRO_CPU_NUM);
+#endif
 
   pr_debug("all done!!!");
 
+#if IS_S3
+  digitalWrite(led::LED, LOW);
+#else
   digitalWrite(led::LED1, HIGH);
   digitalWrite(led::LED2, LOW);
+#endif
 }
 
 void loop()

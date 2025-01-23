@@ -8,14 +8,27 @@
 
 #ifdef DEBUG // debug時に機能のON/OFFを切り替え
 
-// #define CAN_MCP2562
+#define CAN_MCP2562
 #define PITOT
 #define SD_FAST
 #define SPIFLASH
 
 #endif
 
+#ifndef CREATE_SPECIFY_ESP32
+#define CREATE_SPECIFY_ESP32
+
 #ifdef CONFIG_IDF_TARGET_ESP32S3
+#define IS_S3 1
+#elif CONFIG_IDF_TARGET_ESP32
+#define IS_S3 0
+#else
+#error "No supported board specified!!!"
+#endif
+
+#endif
+
+#if IS_S3
 
 namespace pitot
 { // ピトー管
@@ -63,7 +76,7 @@ namespace debug
     const int DEBUG_INPUT2 = 2;
 }
 
-#elif CONFIG_IDF_TARGET_ESP32
+#else
 namespace pitot
 { // ピトー管
     const int SDA = 21;
@@ -105,9 +118,6 @@ namespace debug
 { // debug用 SD_MMCのcloseに使うことにした PULLDOWN
     const int DEBUG_INPUT = 17;
 }
-
-#else
-#error "No supported board specified!!!"
 #endif
 
 struct Data

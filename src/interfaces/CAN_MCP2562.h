@@ -4,6 +4,7 @@
 namespace can
 {
     int init();
+    void sendDataByCAN(void *pvParameter);
 }
 
 #endif

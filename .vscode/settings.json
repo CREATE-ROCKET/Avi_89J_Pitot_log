@@ -15,7 +15,12 @@
         "limits": "cpp",
         "fstream": "cpp",
         "sstream": "cpp",
-        "utility": "cpp"
+        "utility": "cpp",
+        "istream": "cpp",
+        "random": "cpp",
+        "optional": "cpp",
+        "atomic": "cpp",
+        "cstdint": "cpp"
     },
     "C_Cpp.errorSquiggles": "disabled",
     "cmake.ignoreCMakeListsMissing": true,
