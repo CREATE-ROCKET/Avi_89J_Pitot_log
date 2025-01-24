@@ -83,6 +83,8 @@ namespace sd_mmc
 
   int init()
   {
+    semaphore_sd = xSemaphoreCreateBinary();
+    xSemaphoreGive(semaphore_sd);
     if (!SD_MMC.begin())
     {
       pr_debug("SD_init failed");
@@ -94,8 +96,6 @@ namespace sd_mmc
       pr_debug("No SD_MMC card attached");
       return 2; // sd none
     }
-    semaphore_sd = xSemaphoreCreateBinary();
-    xSemaphoreGive(semaphore_sd);
 #ifdef DEBUG
     Serial.print("SD_MMC Card Type: ");
     if (cardType == CARD_MMC)

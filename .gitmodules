@@ -1,6 +1,6 @@
 [submodule "lib/ms4525do"]
 	path = lib/ms4525do
 	url = https://github.com/bolderflight/ms4525do.git
-[submodule "lib/create"]
+[submodule "create_can"]
 	path = lib/create
-	url = https://github.com/Natsu-B/Avi_ESP_Libs
+	url = https://github.com/Natsu-B/Avi_ESP_Libs.git
