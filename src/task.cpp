@@ -31,7 +31,7 @@ namespace task
 #ifdef SPIFLASH
                     Data* pitotData_flash = new Data[numof_maxData];
                     memcpy(pitotData_flash, pitotData, sizeof(Data) * numof_maxData);
-                    xQueueSend(DistributeToFlashQueue, &pitotData, 0);
+                    xQueueSend(DistributeToFlashQueue, &pitotData_flash, 0);
 #endif
 #ifdef CAN_MCP2562
                     // xQueueSend(DistributeToCanQueue, &pitotData, 0);
