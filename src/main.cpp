@@ -138,6 +138,11 @@ void vApplicationStackOverflowHook(TaskHandle_t *xTask, portCHAR *taskname)
 
 #endif
 
+// loop関数のスタックサイズを決める関数
+size_t getArduinoLoopTaskStackSize(void) {
+  return 512; // weak attribute で定義されているため再定義している
+}
+
 void setup()
 {
   int result;
@@ -274,7 +279,11 @@ void setup()
   {
     pr_debug("Can't make new file: %d", result);
   }
+#if IS_S3
+  attachInterrupt(digitalPinToInterrupt(debug::DEBUG_INPUT1), sd_mmc::onButton, RISING);
+#else
   attachInterrupt(digitalPinToInterrupt(debug::DEBUG_INPUT), sd_mmc::onButton, RISING);
+#endif
 #endif
   xTaskCreateUniversal(sd_mmc::makeParity, "makeParity", 8096, NULL, 6, &makeParityTaskHandle, APP_CPU_NUM);
 

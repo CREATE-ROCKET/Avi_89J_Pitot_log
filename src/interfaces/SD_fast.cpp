@@ -12,7 +12,7 @@ File logFileHandle;
 
 String dataFile;
 String logFile;
-bool run_close_task = false;
+volatile bool run_close_task = false;
 
 //  DEBUGINPUTがRiseされたとき、別のタスクに取られてwriteDataToSDTaskがこれ以上動作しないようにする
 volatile SemaphoreHandle_t semaphore_sd;
@@ -286,7 +286,6 @@ namespace sd_mmc
         SD_Data *data_wrapper = new SD_Data;
         data_wrapper->is_log = false;
         data_wrapper->data = data;
-        delete[] data;
         if (xQueueSend(ParityToSDQueue, &data_wrapper, 0) != pdTRUE)
         {
           pr_debug("failed to send parity to sd queue");
@@ -314,38 +313,40 @@ namespace sd_mmc
         if (xSemaphoreTake(semaphore_sd, 0) == pdTRUE)
         {
 #endif
-          char *data = data_wrapper->data;
           if (!(data_wrapper->is_log))
           {
 #if !defined(DEBUG) || defined(SD_FAST)
-            int result = appendFile(dataFile, data);
+            int result = appendFile(dataFile, data_wrapper->data);
             if (!result)
             {
               pr_debug("failed to write SD: %d", result);
             }
 #endif
-            pr_debug("%s", data);
+            pr_debug("%s", data_wrapper->data);
           }
           else
           {
 #if !defined(DEBUG) || defined(SD_FAST)
-            int result = appendFile(logFile, data);
+            int result = appendFile(logFile, data_wrapper->data);
             if (!result)
             {
               pr_debug("failed to write SD: %d", result);
             }
 #endif
-            pr_debug("log: %s", data);
+            pr_debug("log: %s", data_wrapper->data);
           }
+
 #if !defined(DEBUG) || defined(SD_FAST)
         }
+        delete[] data_wrapper->data;
+        delete data_wrapper;
         xSemaphoreGive(semaphore_sd);
 #endif
       }
       else
+      {
         pr_debug("failed to receive Queue");
-
-      delete[] data_wrapper;
+      }
     }
   }
 }
