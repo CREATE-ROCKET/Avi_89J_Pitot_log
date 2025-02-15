@@ -65,7 +65,7 @@ namespace flash
     // setup内で実行 エラー処理なし
     int init()
     {
-        SPIC1.begin(CS, CLK, MISO, MOSI);
+        SPIC1.begin(SPI2_HOST, CLK, MISO, MOSI);
         flash1.begin(&SPIC1, CS, SPIFREQ);
         int result = get_old_data();
         if (result)
@@ -75,7 +75,7 @@ namespace flash
         }
 #ifdef DEBUG
         pr_debug("In DEBUG mode flash will erased");
-        flash1.erase();
+        //flash1.erase();
 #endif
         return 0;
     }

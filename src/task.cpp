@@ -22,7 +22,6 @@ namespace task
                 pitotData[counter] = *tmp_data;
                 ++counter;
                 delete tmp_data;
-                xQueueSend(DistributeToCanQueue, &tmp_data, 0);
 
                 if (counter >= numof_maxData) // 一度に送信するタスク
                 {
@@ -34,7 +33,9 @@ namespace task
                     xQueueSend(DistributeToFlashQueue, &pitotData_flash, 0);
 #endif
 #ifdef CAN_MCP2562
-                    // xQueueSend(DistributeToCanQueue, &pitotData, 0);
+                    Data* pitotData_can = new Data;
+                    *pitotData_can = pitotData[0];
+                    xQueueSend(DistributeToCanQueue, &pitotData_can, 0);
 #endif
                     pitotData = new  Data[numof_maxData];
                 }
@@ -49,7 +50,6 @@ namespace task
 #if defined(DEBUG) && !defined(PITOT)
     void IRAM_ATTR createData(void *pvParameter)
     {
-        float counter = 0;
         portTickType xLastWakeTime = xTaskGetTickCount();
         for (;;)
         {

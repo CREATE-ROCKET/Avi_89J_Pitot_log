@@ -6,7 +6,7 @@
 
 #if !defined(DEBUG) || defined(CAN_MCP2562)
 
-#include <CAN.h>
+#include <CANCREATE.h>
 
 CAN_CREATE CAN(true);
 
@@ -14,7 +14,11 @@ namespace can
 {
     int init()
     {
-        if (CAN.begin(1000E3, 17, 18, 10))
+        can_setting_t settings;
+        settings.baudRate = 100E3;
+        settings.multiData_send = true;
+        settings.filter_config = CAN_FILTER_DEFAULT;
+        if (CAN.begin(settings, RX, TX, 2))
         {
             pr_debug("Start Can failed");
             return 1; // CAN.begin() failed
@@ -23,6 +27,7 @@ namespace can
         return 0;
     }
 
+    // pitotのデータがnumof_maxData * 10μsの間隔で送られてくるため、それを送信する
     IRAM_ATTR void sendDataByCAN(void *pvParameter)
     {
         for (;;)
@@ -32,9 +37,8 @@ namespace can
             {
                 for (int i = 0; i < sizeof(Data) / sizeof(char); i++)
                 {
-                    if (i < 4)
-                        continue;;
                     CAN.sendData(tmp + i, 8);
+                    delay(10);
                 }
             }
         }
