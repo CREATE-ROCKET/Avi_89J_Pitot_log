@@ -85,6 +85,13 @@ namespace sd_mmc
   {
     semaphore_sd = xSemaphoreCreateBinary();
     xSemaphoreGive(semaphore_sd);
+#ifdef IS_S3
+    if (!SD_MMC.setPins(sd_mmc::CLK, sd_mmc::CMD, sd_mmc::DAT0, sd_mmc::DAT1, sd_mmc::DAT2, sd_mmc::DAT3))
+    {
+      pr_debug("failed to set pins");
+      return 3; // failed to set pin
+    }
+#endif
     if (!SD_MMC.begin())
     {
       pr_debug("SD_init failed");
@@ -336,10 +343,10 @@ namespace sd_mmc
             pr_debug("log: %s", data_wrapper->data);
           }
 
+          delete[] data_wrapper->data;
+          delete data_wrapper;
 #if !defined(DEBUG) || defined(SD_FAST)
         }
-        delete[] data_wrapper->data;
-        delete data_wrapper;
         xSemaphoreGive(semaphore_sd);
 #endif
       }

@@ -140,7 +140,7 @@ void vApplicationStackOverflowHook(TaskHandle_t *xTask, portCHAR *taskname)
 
 // loop関数のスタックサイズを決める関数
 size_t getArduinoLoopTaskStackSize(void) {
-  return 512; // weak attribute で定義されているため再定義している
+  return 8096; // weak attribute で定義されているため再定義している
 }
 
 void setup()
