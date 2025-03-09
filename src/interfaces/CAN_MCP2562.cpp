@@ -18,7 +18,7 @@ namespace can
         settings.baudRate = 100E3;
         settings.multiData_send = true;
         settings.filter_config = CAN_FILTER_DEFAULT;
-        if (CAN.begin(settings, RX, TX, 2))
+        if (CAN.begin(settings, RX, TX, 2, SELECT))
         {
             pr_debug("Start Can failed");
             return 1; // CAN.begin() failed
@@ -35,11 +35,11 @@ namespace can
             uint8_t *tmp = nullptr;
             if (xQueueReceive(DistributeToCanQueue, &tmp, portMAX_DELAY) == pdTRUE)
             {
-                for (int i = 0; i < sizeof(Data) / sizeof(char); i++)
-                {
-                    CAN.sendData(tmp + i, 8);
-                    delay(10);
-                }
+                CAN.sendChar(2, '<');
+                for (int i = 0; i < sizeof(Data) / sizeof(uint8_t); i++)
+                    CAN.sendData(2, tmp + i * 8, 8);
+                CAN.sendChar(2, '>');
+                delay(10);
             }
         }
     }

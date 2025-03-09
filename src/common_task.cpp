@@ -178,7 +178,7 @@ namespace cmn_task
             int written = snprintf(
                 buffer + offset,
                 bufferSize,
-                "%u, %g, %g\n",
+                "%14lld, %8g, %8g\n",
                 pitotData[i].time,
                 pitotData[i].pa,
                 pitotData[i].temp);

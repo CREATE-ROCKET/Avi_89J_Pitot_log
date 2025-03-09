@@ -213,7 +213,7 @@ void setup()
   else if (ESP_RST_SW == why_reset)
   {
     cmn_task::blinkLED_start(1, 1000);
-    error_log("restart due to esp_restart at %lldms", esp_timer_get_time);
+    error_log("restart due to esp_restart at %lldms", esp_timer_get_time());
   }
 
 #if !defined(DEBUG) || defined(SD_FAST)

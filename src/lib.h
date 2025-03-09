@@ -32,16 +32,16 @@
 
 namespace pitot
 { // ピトー管
-    const int SDA = 4;
-    const int SCL = 5;
+    const int SDA = 5;
+    const int SCL = 4;
 }
 
 namespace flash
 { // SPI flash
-    const int CS = 9;
-    const int CLK = 8;
-    const int MOSI = 18;
-    const int MISO = 3;
+    const int CS = 18;
+    const int CLK = 3;
+    const int MOSI = 9;
+    const int MISO = 8;
 }
 
 namespace sd_mmc
@@ -62,7 +62,7 @@ namespace can
 }
 
 namespace led
-{//LED
+{ // LED
     const int LED = 6;
     const int LED_PITOT = 7;
     const int LED_SD = 15;
@@ -71,7 +71,7 @@ namespace led
 }
 
 namespace debug
-{ // ピンヘッダ 両方ともPULLDOWNされてる
+{                               // ピンヘッダ 両方ともPULLDOWNされてる
     const int DEBUG_INPUT1 = 1; // SDのclose用に利用する
     const int DEBUG_INPUT2 = 2;
 }
@@ -122,9 +122,9 @@ namespace debug
 
 struct Data
 {
-    uint32_t time; // ESPタイマ初期化時からの経過時間 ms
-    float pa;      // 圧力
-    float temp;    // 温度
+    int64_t time; // ESPタイマ初期化時からの経過時間 ms
+    float pa;     // 圧力
+    float temp;   // 温度
 };
 
 struct SD_Data
@@ -149,7 +149,7 @@ constexpr int numof_maxData = numof_writeData / (sizeof(Data) / sizeof(uint8_t))
 
 // 必要なバッファサイズを計算する
 // 各行が最大で21文字 + 終端の '\0'
-constexpr int bufferSize = 12 + 2 + 6 + 2 + 6 + 1;
-constexpr int AllbufferSize = 2 * numof_maxData * bufferSize + 1; // 865
+constexpr int bufferSize = 35 + 1;
+constexpr int AllbufferSize = numof_maxData * bufferSize + 1; // 865
 
 #endif

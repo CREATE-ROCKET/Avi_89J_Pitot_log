@@ -12,11 +12,17 @@ namespace pitot
 {
     int init()
     {
+#ifdef IS_S3
+        if (!Wire.setPins(pitot::SDA, pitot::SCL))
+        {
+            return 4;
+        }
+#endif
         if (!Wire.begin())
         {
             return 1; // Wire.begin() failed
         }
-        if (!Wire.setClock(400000))
+        if (!Wire.setClock(0))
         {
             return 2; // Wire.setClock() failed
         }
@@ -55,11 +61,12 @@ namespace pitot
             if (pres.Read())
             {
                 Data *pitotData = new Data;
-                pitotData->time = static_cast<uint32_t>(esp_timer_get_time());
+                pitotData->time = esp_timer_get_time();
                 pitotData->pa = pres.pres_pa();
                 pitotData->temp = pres.die_temp_c();
-                if (xQueueSend(PitotToDistributeQueue, &pitotData, 2) != pdTRUE){
-                    error_log("%s(%d) failed to send queue date:%lu Queue:%d",__FILE__, __LINE__, millis(), uxQueueMessagesWaiting(PitotToDistributeQueue));
+                if (xQueueSend(PitotToDistributeQueue, &pitotData, 2) != pdTRUE)
+                {
+                    error_log("%s(%d) failed to send queue date:%lu Queue:%d", __FILE__, __LINE__, millis(), uxQueueMessagesWaiting(PitotToDistributeQueue));
                     delete pitotData;
                 }
                 vTaskDelayUntil(&xLastWakeTime, 10 / portTICK_PERIOD_MS); // 10msごとに呼び出すことにする
