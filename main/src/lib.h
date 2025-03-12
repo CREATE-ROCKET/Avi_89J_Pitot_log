@@ -3,6 +3,7 @@
 
 #include <sdkconfig.h> // どのboardを使ってるか
 #include <stdint.h>
+#include <task_queue.h>
 
 #define DEBUG // debug時利用
 
@@ -148,8 +149,7 @@ constexpr int numof_writeData = 256;
 constexpr int numof_maxData = numof_writeData / (sizeof(Data) / sizeof(uint8_t));
 
 // 必要なバッファサイズを計算する
-// 各行が最大で21文字 + 終端の '\0'
-constexpr int bufferSize = 35 + 1;
-constexpr int AllbufferSize = numof_maxData * bufferSize + 1; // 865
+constexpr int bufferSize = 40;
+constexpr int AllbufferSize = numof_maxData * bufferSize + 1;
 
 #endif

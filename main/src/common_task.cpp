@@ -170,15 +170,15 @@ namespace cmn_task
             return nullptr; // メモリ確保失敗時はnullptrを返す
         }
 
-        size_t offset = 0;
+        int offset = 0;
 
         for (int i = 0; i < numof_maxData; ++i)
         {
             // snprintfを使って1行をフォーマット
             int written = snprintf(
-                buffer + offset,
-                bufferSize,
-                "%14lld, %8g, %8g\n",
+                buffer,
+                AllbufferSize - offset,
+                "%14lld,%8g,%8g\n",
                 pitotData[i].time,
                 pitotData[i].pa,
                 pitotData[i].temp);

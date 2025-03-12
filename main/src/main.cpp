@@ -139,7 +139,8 @@ void vApplicationStackOverflowHook(TaskHandle_t *xTask, portCHAR *taskname)
 #endif
 
 // loop関数のスタックサイズを決める関数
-size_t getArduinoLoopTaskStackSize(void) {
+size_t getArduinoLoopTaskStackSize(void)
+{
   return 8096; // weak attribute で定義されているため再定義している
 }
 
@@ -193,11 +194,12 @@ void setup()
   ParityToSDQueue = xQueueCreate(30, sizeof(char *));
   DistributeToFlashQueue = xQueueCreate(5, sizeof(u_int8_t *));
   DistributeToParityQueue = xQueueCreate(5, sizeof(Data *));
-  DistributeToCanQueue = xQueueCreate(5, sizeof(uint8_t*));
+  DistributeToCanQueue = xQueueCreate(5, sizeof(uint8_t *));
 
   error_t why_reset = esp_reset_reason();
   if (ESP_RST_PANIC == why_reset)
   {
+    cmn_task::blinkLED_start(1, 1000);
     char backtrace_str[1024];
     uint16_t offset = 0;
     offset += sprintf(backtrace_str + offset, "Backtrace: ");
@@ -216,6 +218,19 @@ void setup()
     error_log("restart due to esp_restart at %lldms", esp_timer_get_time());
   }
 
+#if !defined(DEBUG) || defined(CAN_MCP2562)
+  result = can::init();
+  if (result)
+  {
+    error_log("can_init failed: %d", result);
+  }
+#if IS_S3
+  else
+    digitalWrite(led::LED_CAN, HIGH);
+#endif
+  xTaskCreateUniversal(can::sendDataByCAN, "sendDataByCAN", 8096, NULL, 6, &sendDataByCanTaskHandle, PRO_CPU_NUM);
+#endif
+
 #if !defined(DEBUG) || defined(SD_FAST)
   result = sd_mmc::init();
   if (result)
@@ -226,6 +241,16 @@ void setup()
 #if IS_S3
   else
     digitalWrite(led::LED_SD, HIGH);
+#endif
+  result = sd_mmc::makeNewFile();
+  if (result)
+  {
+    pr_debug("Can't make new file: %d", result);
+  }
+#if IS_S3
+  attachInterrupt(digitalPinToInterrupt(debug::DEBUG_INPUT1), sd_mmc::onButton, RISING);
+#else
+  attachInterrupt(digitalPinToInterrupt(debug::DEBUG_INPUT), sd_mmc::onButton, RISING);
 #endif
 #endif
 
@@ -240,6 +265,7 @@ void setup()
   else
     digitalWrite(led::LED_FLASH, HIGH);
 #endif
+  xTaskCreateUniversal(flash::writeDataToFlash, "writeDataToFlash", 8096, NULL, 6, &writeDataToFlashTaskHandle, PRO_CPU_NUM);
 #endif
 
 #if !defined(DEBUG) || defined(PITOT)
@@ -253,17 +279,9 @@ void setup()
   else
     digitalWrite(led::LED_PITOT, HIGH);
 #endif
-#endif
-#if !defined(DEBUG) || defined(CAN_MCP2562)
-  result = can::init();
-  if (result)
-  {
-    error_log("can_init failed: %d", result);
-  }
-#if IS_S3
-  else
-    digitalWrite(led::LED_CAN, HIGH);
-#endif
+  xTaskCreateUniversal(pitot::getPitotData, "getPitotDataTask", 2048, NULL, 8, &getPitotDataTaskHandle, PRO_CPU_NUM);
+#else
+  xTaskCreateUniversal(task::createData, "createDataForTest", 2048, NULL, 8, &getPitotDataTaskHandle, PRO_CPU_NUM);
 #endif
 
   if (error_num >= 2)
@@ -273,37 +291,11 @@ void setup()
   }
   pr_debug("done all init");
 
-#if !defined(DEBUG) || defined(SD_FAST)
-  result = sd_mmc::makeNewFile();
-  if (result)
-  {
-    pr_debug("Can't make new file: %d", result);
-  }
-#if IS_S3
-  attachInterrupt(digitalPinToInterrupt(debug::DEBUG_INPUT1), sd_mmc::onButton, RISING);
-#else
-  attachInterrupt(digitalPinToInterrupt(debug::DEBUG_INPUT), sd_mmc::onButton, RISING);
-#endif
-#endif
   xTaskCreateUniversal(sd_mmc::makeParity, "makeParity", 8096, NULL, 6, &makeParityTaskHandle, APP_CPU_NUM);
 
   xTaskCreateUniversal(sd_mmc::writeDataToSD, "writeDataToSD", 8096, NULL, 6, &writeDataToSDTaskHandle, APP_CPU_NUM);
 
-#if !defined(DEBUG) || defined(PITOT)
-  xTaskCreateUniversal(pitot::getPitotData, "getPitotDataTask", 2048, NULL, 8, &getPitotDataTaskHandle, PRO_CPU_NUM);
-#else
-  xTaskCreateUniversal(task::createData, "createDataForTest", 2048, NULL, 8, &getPitotDataTaskHandle, PRO_CPU_NUM);
-#endif
-
   xTaskCreateUniversal(task::distribute_data, "distributeData", 8096, NULL, 7, &sendDataToEveryICTaskHandle, APP_CPU_NUM);
-
-#if !defined(DEBUG) || defined(SPIFLASH)
-  xTaskCreateUniversal(flash::writeDataToFlash, "writeDataToFlash", 8096, NULL, 6, &writeDataToFlashTaskHandle, PRO_CPU_NUM);
-#endif
-
-#if !defined(DEBUG) || defined(CAN_MCP2562)
-  xTaskCreateUniversal(can::sendDataByCAN, "sendDataByCAN", 8096, NULL, 6, &sendDataByCanTaskHandle, PRO_CPU_NUM);
-#endif
 
   pr_debug("all done!!!");
 

@@ -13,8 +13,8 @@
 SPICREATE::SPICreate SPIC1;
 Flash flash1;
 
-const int data_size = numof_maxData * (sizeof(Data) / sizeof(uint8_t));
-const int FLASH_BLOCK_SIZE = 0x100;
+constexpr int data_size = numof_maxData * (sizeof(Data) / sizeof(uint8_t));
+constexpr int FLASH_BLOCK_SIZE = 0x100;
 
 // Flashから読み取った値をData型に変換する
 union PitotDataUnion
@@ -75,7 +75,7 @@ namespace flash
         }
 #ifdef DEBUG
         pr_debug("In DEBUG mode flash will erased");
-        //flash1.erase();
+        // flash1.erase();
 #endif
         return 0;
     }
@@ -85,7 +85,7 @@ namespace flash
         int counter = 0;
         pr_debug("flash write data size: %d", data_size);
 #ifdef DEBUG
-        configASSERT(256 > data_size);
+        configASSERT(256 >= data_size);
 #endif
         while (true)
         {

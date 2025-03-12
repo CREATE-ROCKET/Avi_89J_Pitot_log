@@ -77,7 +77,7 @@ namespace sd_mmc
       return 2; // failed to append file
     }
     file.close();
-    pr_debug("write time: %ld ms", esp_timer_get_time() - sd_write_time);
+    pr_debug("write time: %lld ms", esp_timer_get_time() - sd_write_time);
     return 0;
   }
 
@@ -324,7 +324,7 @@ namespace sd_mmc
           {
 #if !defined(DEBUG) || defined(SD_FAST)
             int result = appendFile(dataFile, data_wrapper->data);
-            if (!result)
+            if (result)
             {
               pr_debug("failed to write SD: %d", result);
             }
@@ -335,7 +335,7 @@ namespace sd_mmc
           {
 #if !defined(DEBUG) || defined(SD_FAST)
             int result = appendFile(logFile, data_wrapper->data);
-            if (!result)
+            if (result)
             {
               pr_debug("failed to write SD: %d", result);
             }
