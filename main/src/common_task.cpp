@@ -176,7 +176,7 @@ namespace cmn_task
         {
             // snprintfを使って1行をフォーマット
             int written = snprintf(
-                buffer,
+                buffer + offset,
                 AllbufferSize - offset,
                 "%14lld,%8g,%8g\n",
                 pitotData[i].time,
