@@ -9,10 +9,10 @@
 
 #ifdef DEBUG // debug時に機能のON/OFFを切り替え
 
-#define CAN_MCP2562
+// #define CAN_MCP2562
 #define PITOT
 #define SD_FAST
-#define SPIFLASH
+// #define SPIFLASH
 
 #endif
 

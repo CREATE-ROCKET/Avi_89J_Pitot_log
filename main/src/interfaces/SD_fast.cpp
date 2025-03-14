@@ -279,6 +279,7 @@ namespace sd_mmc
     while (true)
     {
       Data *pitotData = nullptr;
+      constexpr float rho = 2.8966 * 101.33 / 8.314 / 10;
       // Queueにデータがくるまで待つ
       if (xQueueReceive(DistributeToParityQueue, &pitotData, portMAX_DELAY) == pdTRUE)
       {
@@ -289,6 +290,7 @@ namespace sd_mmc
           pr_debug("nullptr found");
           continue;
         }
+        pr_debug("%s, speed: %g", data, std::sqrt(pitotData->pa * 2 / rho));
         delete[] pitotData;
         SD_Data *data_wrapper = new SD_Data;
         data_wrapper->is_log = false;
@@ -329,7 +331,7 @@ namespace sd_mmc
               pr_debug("failed to write SD: %d", result);
             }
 #endif
-            pr_debug("%s", data_wrapper->data);
+            // pr_debug("%s", data_wrapper->data);
           }
           else
           {
