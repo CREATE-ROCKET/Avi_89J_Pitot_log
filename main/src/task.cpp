@@ -27,17 +27,25 @@ namespace task
                 {
                     counter = 0;
                     xQueueSend(DistributeToParityQueue, &pitotData, 0);
-#ifdef SPIFLASH
-                    Data* pitotData_flash = new Data[numof_maxData];
-                    memcpy(pitotData_flash, pitotData, sizeof(Data) * numof_maxData);
-                    xQueueSend(DistributeToFlashQueue, &pitotData_flash, 0);
-#endif
+#if !defined(DEBUG) || defined(SPIFLASH)
 #ifdef CAN_MCP2562
-                    Data* pitotData_can = new Data;
+                    if (xSemaphoreTake(semaphore_flash, 0) == pdTRUE)
+#endif
+                    {
+                        Data *pitotData_flash = new Data[numof_maxData];
+                        memcpy(pitotData_flash, pitotData, sizeof(Data) * numof_maxData);
+                        xQueueSend(DistributeToFlashQueue, &pitotData_flash, 0);
+#ifdef CAN_MCP2562
+                        xSemaphoreGive(semaphore_flash);
+#endif
+                    }
+#endif
+#if defined(CAN_MCP2562) || !defined(DEBUG)
+                    Data *pitotData_can = new Data;
                     *pitotData_can = pitotData[0];
                     xQueueSend(DistributeToCanQueue, &pitotData_can, 0);
 #endif
-                    pitotData = new  Data[numof_maxData];
+                    pitotData = new Data[numof_maxData];
                 }
             }
             else
@@ -55,7 +63,7 @@ namespace task
         {
             Data *pitotData = new Data;
             // 2^32ms = 49日 uint32_tで足りると判断
-            pitotData->time = static_cast<uint32_t>(esp_timer_get_time());
+            pitotData->time = esp_timer_get_time();
             pitotData->pa = 12.099567;
             pitotData->temp = 23.082558; // test用の値 実際に取れた値の一つ
             if (xQueueSend(PitotToDistributeQueue, &pitotData, 2) != pdTRUE)

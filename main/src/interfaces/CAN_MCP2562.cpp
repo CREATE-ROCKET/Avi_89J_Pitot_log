@@ -4,13 +4,14 @@
 #include "task_queue.h"
 #include <Arduino.h>
 
+volatile SemaphoreHandle_t semaphore_flash;
+
 #if !defined(DEBUG) || defined(CAN_MCP2562)
 
 #include <CANCREATE.h>
 
 CAN_CREATE CAN(true);
 
-SemaphoreHandle_t semaphore_flash;
 TaskHandle_t canReceiveTask; // CANを受け取るタスク
 
 namespace can
@@ -33,7 +34,6 @@ namespace can
             pr_debug("failed to Start Can");
             return 2;
         }
-        xSemaphoreTake(semaphore_flash, portMAX_DELAY);
         return 0;
     }
 
@@ -47,7 +47,10 @@ namespace can
             {
                 CAN.sendChar(2, '<');
                 for (int i = 0; i < sizeof(Data) / sizeof(uint8_t); i++)
+                {
                     CAN.sendData(2, tmp + i * 8, 8);
+                    delay(10);
+                }
                 CAN.sendChar(2, '>');
                 delay(10);
             }
@@ -84,7 +87,7 @@ namespace can
                         }
                         break;
                     case 'E': // フラッシュ削除
-                        if (xTaskNotifyGive())
+                        // if (xTaskNotifyGive(writeDataToFlashTaskHandle))
                         {
                             error_log("failed to Erase flash");
                         }
@@ -95,9 +98,18 @@ namespace can
                 }
             }
             else
-                error_log("failed to send CAN");
+                error_log("failed to read CAN");
         }
     }
 }
-
 #endif
+
+namespace can
+{
+    void canSend(char data)
+    {
+#if !defined(DEBUG) || defined(CAN_MCP2562)
+        CAN.sendChar(1, data);
+#endif
+    }
+}

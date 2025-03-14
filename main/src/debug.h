@@ -15,33 +15,33 @@
 //*
 // なるべく<Arduino.h>をincludeしたくないので、、、
 // do while(0) で展開箇所依存を減らす
-#define error_log(format, ...)                                            \
-  do                                                                      \
-  {                                                                       \
-    char *buffer = new char[AllbufferSize];                               \
-    int written = snprintf(buffer, AllbufferSize, format, ##__VA_ARGS__); \
-    if (written < 0 || written >= AllbufferSize)                          \
-    {                                                                     \
-      delete[] buffer;                                                    \
-      char *buffer = new char[written + 1];                               \
-      int re_written = snprintf(buffer, written, format, ##__VA_ARGS__);  \
-      if (written < 0 || re_written >= written)                           \
-      {                                                                   \
-        pr_debug("failed to make error log");                             \
-        pr_debug(format, ##__VA_ARGS__);                                  \
-        break;                                                            \
-      }                                                                   \
-    }                                                                     \
-    SD_Data *data_wrapper = new SD_Data;                                  \
-    data_wrapper->is_log = true;                                          \
-    data_wrapper->data = buffer;                                          \
-    if (xQueueSend(ParityToSDQueue, &data_wrapper, 0) != pdPASS)          \
-    {                                                                     \
-      delete[] buffer;                                                    \
-      pr_debug("failed to send error log");                               \
-      pr_debug(format, ##__VA_ARGS__);                                    \
-      break;                                                              \
-    }                                                                     \
+#define error_log(format, ...)                                                                         \
+  do                                                                                                   \
+  {                                                                                                    \
+    char *buffer = new char[AllbufferSize];                                                            \
+    int written = snprintf(buffer, AllbufferSize, "%s%d: " format, __FILE__, __LINE__, ##__VA_ARGS__); \
+    if (written < 0 || written >= AllbufferSize)                                                       \
+    {                                                                                                  \
+      delete[] buffer;                                                                                 \
+      char *buffer = new char[written + 1];                                                            \
+      int re_written = snprintf(buffer, written, "%s%d: " format, __FILE__, __LINE__, ##__VA_ARGS__);  \
+      if (written < 0 || re_written >= written)                                                        \
+      {                                                                                                \
+        pr_debug("failed to make error log");                                                          \
+        pr_debug(format, ##__VA_ARGS__);                                                               \
+        break;                                                                                         \
+      }                                                                                                \
+    }                                                                                                  \
+    SD_Data *data_wrapper = new SD_Data;                                                               \
+    data_wrapper->is_log = true;                                                                       \
+    data_wrapper->data = buffer;                                                                       \
+    if (xQueueSend(ParityToSDQueue, &data_wrapper, 0) != pdPASS)                                       \
+    {                                                                                                  \
+      delete[] buffer;                                                                                 \
+      pr_debug("failed to send error log");                                                            \
+      pr_debug(format, ##__VA_ARGS__);                                                                 \
+      break;                                                                                           \
+    }                                                                                                  \
   } while (0)
 ;
 

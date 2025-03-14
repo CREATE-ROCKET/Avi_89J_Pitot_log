@@ -19,6 +19,6 @@ extern QueueHandle_t ParityToSDQueue;         // ParityからSDにデータを�
 extern QueueHandle_t DistributeToCanQueue;    // sendDataからCanにデータを渡すQueue
 
 // semaphore handle
-extern SemaphoreHandle_t semaphore_flash;
+extern volatile SemaphoreHandle_t semaphore_flash;
 extern volatile SemaphoreHandle_t semaphore_sd;
 #endif

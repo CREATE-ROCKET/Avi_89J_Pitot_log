@@ -1,10 +1,10 @@
 #include <Arduino.h>
-#include "CANCREATE 1.0.0/CANCREATE.cpp"
+#include "CANCREATE.cpp"
 
 // ピトー管のデータの保存するstruct
 struct Data
 {
-    uint32_t time; // ESPタイマ初期化時からの経過時間 ms
+    uint64_t time; // ESPタイマ初期化時からの経過時間 ms
     float pa;      // 圧力
     float temp;    // 温度
 };
@@ -17,8 +17,8 @@ union PitotDataUnion
     uint8_t Uint8Data[numof_maxData];
 };
 
-constexpr int CAN_RX = 21;
-constexpr int CAN_TX = 22;
+constexpr int CAN_RX = 17;
+constexpr int CAN_TX = 18;
 
 CAN_CREATE CAN(true);
 bool is_receiving;
@@ -28,6 +28,8 @@ PitotDataUnion pitot_data;
 void setup()
 {
     Serial.begin(115200);
+    while (Serial)
+        delay(10);
     if (CAN.begin(100E3, CAN_RX, CAN_TX, 0))
     {
         Serial.println("failed to init can");
@@ -35,10 +37,12 @@ void setup()
             ;
     }
     is_receiving = false;
+    Serial.println("success init");
 }
 
 void loop()
 {
+    Serial.println("HELLO");
     if (CAN.available())
     {
         can_return_t Data;
@@ -76,7 +80,7 @@ void loop()
                         if (*(Data.data) == '>')
                         {
                             Serial.println("success to receive");
-                            Serial.printf("time:%u ,pa: %g, temp: %g",
+                            Serial.printf("time:%u ,pa: %g, temp: %g\n",
                                           pitot_data.pitotData.time,
                                           pitot_data.pitotData.pa,
                                           pitot_data.pitotData.temp);
@@ -89,9 +93,18 @@ void loop()
             }
             if (Data.id == 1)
             { // ピトー管基板の情報(生きてるかとか)用
-                Serial.println("Display pitot log board info...");
-                // TODO
+                if (Data.size == 1)
+                {
+                    Serial.printf("data: %c\n", Data.data[0]);
+                }
             }
         }
+    }
+
+    if (Serial.available())
+    {
+        char data = Serial.read();
+        Serial.println(data);
+        CAN.sendChar(0, data);
     }
 }

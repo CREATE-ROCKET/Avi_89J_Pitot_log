@@ -195,7 +195,7 @@ void setup()
   DistributeToFlashQueue = xQueueCreate(5, sizeof(u_int8_t *));
   DistributeToParityQueue = xQueueCreate(5, sizeof(Data *));
   DistributeToCanQueue = xQueueCreate(5, sizeof(uint8_t *));
-
+  error_log("init: %lld", esp_timer_get_time());
   error_t why_reset = esp_reset_reason();
   if (ESP_RST_PANIC == why_reset)
   {
@@ -229,8 +229,8 @@ void setup()
     digitalWrite(led::LED_CAN, HIGH);
 #endif
   xTaskCreateUniversal(can::sendDataByCAN, "sendDataByCAN", 8096, NULL, 6, &sendDataByCanTaskHandle, PRO_CPU_NUM);
+  can::canSend('i');
 #endif
-
 #if !defined(DEBUG) || defined(SD_FAST)
   result = sd_mmc::init();
   if (result)

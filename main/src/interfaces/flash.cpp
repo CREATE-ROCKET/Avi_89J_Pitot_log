@@ -5,6 +5,7 @@
 #include <Arduino.h>
 #include "task_queue.h"
 #include "common_task.h"
+#include "CAN_MCP2562.h"
 
 #if !defined(DEBUG) || defined(SPIFLASH)
 
@@ -15,6 +16,7 @@ Flash flash1;
 
 constexpr int data_size = numof_maxData * (sizeof(Data) / sizeof(uint8_t));
 constexpr int FLASH_BLOCK_SIZE = 0x100;
+constexpr uint32_t SPI_FLASH_MAX_ADDRESS = 0x2000000;
 
 // Flashから読み取った値をData型に変換する
 union PitotDataUnion
@@ -67,16 +69,12 @@ namespace flash
     {
         SPIC1.begin(SPI2_HOST, CLK, MISO, MOSI);
         flash1.begin(&SPIC1, CS, SPIFREQ);
-        int result = get_old_data();
-        if (result)
-        {
-            pr_debug("Can't get old flash data");
-            return 1;
-        }
-#ifdef DEBUG
-        pr_debug("In DEBUG mode flash will erased");
-        // flash1.erase();
-#endif
+        // int result = get_old_data();
+        // if (result)
+        // {
+        //     pr_debug("Can't get old flash data: %d", result);
+        //     return 1;
+        // }
         return 0;
     }
 
@@ -90,21 +88,14 @@ namespace flash
         while (true)
         {
             // numof_maxData個だけDataが送られてくるので、あまりを0埋めして保存
-            uint8_t *tmp = nullptr;
+            uint8_t *pitotData = nullptr;
             // Queueにデータがくるまで待つ
-            if (xQueueReceive(DistributeToFlashQueue, &tmp, portMAX_DELAY) == pdTRUE)
+            if (xQueueReceive(DistributeToFlashQueue, &pitotData, 100) == pdTRUE)
             {
-                uint8_t pitotData[256];
-                for (int i = 0; i < 256; i++)
+                if (counter >= SPI_FLASH_MAX_ADDRESS)
                 {
-                    if (i < data_size)
-                    {
-                        pitotData[i] = tmp[i];
-                    }
-                    else
-                    {
-                        pitotData[i] = 255;
-                    }
+                    error_log("failed to init");
+                    continue;
                 }
                 flash1.write(counter, pitotData);
                 /*
@@ -116,13 +107,13 @@ namespace flash
                 char *data = cmn_task::DataToChar(change.pitotData);
                 pr_debug("flash data: %s", data);
                 */
-                delete[] tmp;
+                delete[] pitotData;
                 counter += FLASH_BLOCK_SIZE;
             }
-            else
-            {
-                pr_debug("failed to receive DistributeToFlashQueue");
-            }
+            // if (ulTaskNotifyTake(pdTRUE, 0)){
+            //     flash1.erase();
+            //     can::canSend('f');
+            // }
         }
     }
 }
