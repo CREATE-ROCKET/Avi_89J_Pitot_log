@@ -279,7 +279,7 @@ namespace sd_mmc
     while (true)
     {
       Data *pitotData = nullptr;
-      constexpr float rho = 2.8966 * 101.33 / 8.314 / 10;
+      constexpr float rho = 1.293;
       // Queueにデータがくるまで待つ
       if (xQueueReceive(DistributeToParityQueue, &pitotData, portMAX_DELAY) == pdTRUE)
       {
