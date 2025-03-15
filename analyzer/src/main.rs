@@ -49,10 +49,11 @@ fn graph_print(
     x: Vec<i64>,
     y: Vec<f32>,
     graph_name: &str,
+    output_name: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let width = 1080; // 横
     let height = 720; // 縦
-    let graph_path_name = format!("{}.png", graph_name);
+    let graph_path_name = format!("{}_{}.png", output_name, graph_name);
     let root = plotters::prelude::BitMapBackend::new(&graph_path_name, (width, height))
         .into_drawing_area();
     root.fill(&WHITE)?;
@@ -123,16 +124,34 @@ fn main() {
         .zip(temperature_data.clone().into_iter())
     {
         // 密度計算
-        let rho = 2.8966 * args.static_pascal / 1.00E3 / 8.314 / temp;
+        let rho = 0.0034837 * args.static_pascal / (temp + 273.15);
         let result = (2.0 * pascal / rho).sqrt();
         speed_data.push(result);
     }
 
     assert_eq!(time_data.len(), speed_data.len());
 
-    graph_print(time_data.clone(), temperature_data.clone(), "temp_data").unwrap();
-    graph_print(time_data.clone(), pascal_data.clone(), "pascal_data").unwrap();
-    graph_print(time_data.clone(), speed_data.clone(), "speed_data").unwrap();
+    graph_print(
+        time_data.clone(),
+        temperature_data.clone(),
+        "temp_data",
+        &args.output,
+    )
+    .unwrap();
+    graph_print(
+        time_data.clone(),
+        pascal_data.clone(),
+        "pascal_data",
+        &args.output,
+    )
+    .unwrap();
+    graph_print(
+        time_data.clone(),
+        speed_data.clone(),
+        "speed_data",
+        &args.output,
+    )
+    .unwrap();
 
     let mut speed_data_limited: Vec<f32> = Vec::new();
     let mut time_data_limited: Vec<i64> = Vec::new();
@@ -148,5 +167,11 @@ fn main() {
         }
     }
 
-    graph_print(time_data_limited.clone(), speed_data_limited.clone(), "speed_data_lim").unwrap();
+    graph_print(
+        time_data_limited.clone(),
+        speed_data_limited.clone(),
+        "speed_data_lim",
+        &args.output,
+    )
+    .unwrap();
 }
