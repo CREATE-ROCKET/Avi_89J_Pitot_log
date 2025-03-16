@@ -5,9 +5,8 @@
 // pr_debug("%s(%d)", __FILE__, __LINE__);
 
 #ifdef DEBUG
-#define pr_debug(fmt, ...)           \
-  Serial.printf(fmt, ##__VA_ARGS__); \
-  Serial.println();
+#define pr_debug(fmt, ...) \
+  Serial.printf("%s%d: " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__);
 #else
 #define pr_debug(fmt, ...)
 #endif

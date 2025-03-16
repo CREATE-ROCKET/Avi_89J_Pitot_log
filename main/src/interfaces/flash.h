@@ -5,6 +5,7 @@ namespace flash
 {
     int init();
     void writeDataToFlash(void *pvParameter);
+    void eraseFlash();
 }
 
 #endif

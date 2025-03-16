@@ -6,12 +6,12 @@
 #include "task_queue.h"
 #include "common_task.h"
 
-File dataFileHandle;
-File logFileHandle;
 #if !defined(DEBUG) || defined(SD_FAST)
 
 String dataFile;
 String logFile;
+String SPIFFS_File;
+String SPIflashFile;
 volatile bool run_close_task = false;
 
 //  DEBUGINPUTがRiseされたとき、別のタスクに取られてwriteDataToSDTaskがこれ以上動作しないようにする
@@ -138,6 +138,12 @@ namespace sd_mmc
   //  - log1.csv
   //  - log2.csv
   //  - ...
+  // - SPIflash
+  //  - data1.csv
+  //  - ...
+  // - internal flash
+  //  - data1.csv
+  //  - ...
   // - number.txt
   // dataフォルダ直下にピトー管のデータを保存し、
   // dataN.csv(Nは1,2,3...)の形式
@@ -184,6 +190,16 @@ namespace sd_mmc
         pr_debug("Failed to create log dir");
         return 9;
       }
+      if (!SD_MMC.mkdir("/SPIflash"))
+      {
+        pr_debug("Failed to create SPIflash dir");
+        return 13;
+      }
+      if (!SD_MMC.mkdir("/internal_flash"))
+      {
+        pr_debug("Failed to create internal flash dir");
+        return 14;
+      }
     }
     else
     {
@@ -197,7 +213,7 @@ namespace sd_mmc
       String number_txt = "";
       while (file.available())
       {
-        number_txt.concat((char)file.read()); // += (char)file.read();
+        number_txt.concat((char)file.read());
       }
       if (!number_txt.length())
       {
@@ -248,6 +264,36 @@ namespace sd_mmc
     File logFileHandle = SD_MMC.open(logFile, FILE_WRITE);
     dataFileHandle.close();
     logFileHandle.close();
+
+    SPIFFS_File = "/internal_flash/data";
+    SPIflashFile = "/SPIflash/data";
+    SPIFFS_File += number_path_csv;
+    SPIflashFile += number_path_csv;
+    File internalSPIFileHandle = SD_MMC.open(SPIFFS_File, FILE_WRITE);
+    if (!internalSPIFileHandle)
+    {
+      pr_debug("failed to open file");
+      return 15;
+    }
+    if (!internalSPIFileHandle.print("time, pascal, temperature\n"))
+    {
+      pr_debug("failed to write file");
+      return 16;
+    }
+    internalSPIFileHandle.close();
+
+    File SPIflashFileHandle = SD_MMC.open(SPIFFS_File, FILE_WRITE);
+    if (!SPIflashFileHandle)
+    {
+      pr_debug("failed to open file");
+      return 17;
+    }
+    if (!SPIflashFileHandle.print("time, pascal, temperature\n"))
+    {
+      pr_debug("failed to write file");
+      return 18;
+    }
+    SPIflashFileHandle.close();
     return 0;
   }
 
@@ -256,7 +302,11 @@ namespace sd_mmc
     xSemaphoreTake(semaphore_sd, portMAX_DELAY);
     pr_debug("close SD");
     SD_MMC.end();
+#ifdef IS_S3
+    cmn_task::blinkLED_start(3, 1000);
+#else
     cmn_task::blinkLED_start(1, 1000);
+#endif
     vTaskDelete(NULL);
   }
 

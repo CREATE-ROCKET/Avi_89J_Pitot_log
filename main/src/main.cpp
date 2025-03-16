@@ -31,6 +31,7 @@
 //    IO17    task1,
 
 #include <Arduino.h>
+#include <esp_task_wdt.h>
 #include "lib.h"
 #include "debug.h"
 #include "task_queue.h"
@@ -188,6 +189,11 @@ void setup()
   digitalWrite(led::LED1, LOW);
   digitalWrite(led::LED2, HIGH);
 #endif
+
+  // ウォッチドッグタイマーを有効化する
+  TaskHandle_t watchdog = xTaskGetIdleTaskHandle();
+  if (!watchdog || esp_task_wdt_add(watchdog) != ESP_OK)
+    pr_debug("failed to enable watch dog timer");
 
   // Queue作成 error_logを利用したいので上に置いてる
   PitotToDistributeQueue = xQueueCreate(20, sizeof(Data *));

@@ -3,6 +3,8 @@
 #include "debug.h"
 #include "task_queue.h"
 #include <Arduino.h>
+#include "../common_task.h"
+#include "flash.h"
 
 volatile SemaphoreHandle_t semaphore_flash;
 
@@ -10,9 +12,18 @@ volatile SemaphoreHandle_t semaphore_flash;
 
 #include <CANCREATE.h>
 
+// CANの通信コマンド一覧
+// 受信:
+//  - S: シーケンス開始
+//  - Q: シーケンス停止
+//  - K: microSD停止
+//  - E: flash削除
+
 CAN_CREATE CAN(true);
 
 TaskHandle_t canReceiveTask; // CANを受け取るタスク
+bool is_in_sequence;         // シークエンス中かどうか
+bool is_SD_on = true;        // SDが動作しているかどうか
 
 namespace can
 {
@@ -66,36 +77,65 @@ namespace can
             {
                 if (Data.size == 1)
                 {
+                    canSend(Data.data[0]); // エコーバック
                     switch (Data.data[0])
                     {
                     case 'S': // シーケンス開始
-                        if (xSemaphoreGive(semaphore_flash) != pdTRUE)
+                        if (!is_in_sequence)
+                            canSend('F');
+                        else if (xSemaphoreGive(semaphore_flash) != pdTRUE)
                         {
                             error_log("failed to Start Sequence");
                         }
+                        is_in_sequence = true;
                         break;
                     case 'Q': // シーケンス停止
+                        if (is_in_sequence)
+                            canSend('F');
                         if (xSemaphoreTake(semaphore_flash, portMAX_DELAY) != pdTRUE)
                         {
                             error_log("failed to End Sequence");
                         }
+                        is_in_sequence = false;
                         break;
                     case 'K': // microSD停止
-                        if (xSemaphoreTake(semaphore_sd, portMAX_DELAY) != pdTRUE)
+                        if (is_in_sequence)
+                            canSend('F');
+                        else if (xSemaphoreTake(semaphore_sd, portMAX_DELAY) != pdTRUE)
                         {
                             error_log("failed to End SD");
                         }
+                        else
+                        {
+#ifdef IS_S3
+                            cmn_task::blinkLED_start(3, 1000);
+#else
+                            cmn_task::blinkLED_start(1, 1000);
+#endif
+                            is_SD_on = false;
+                        }
                         break;
                     case 'E': // フラッシュ削除
-                        // if (xTaskNotifyGive(writeDataToFlashTaskHandle))
+                        if (is_in_sequence)
+                            canSend('F');
+                        flash::eraseFlash();
+                        canSend('s');
+                        break;
+                    case 'W': // フラッシュのデータをmicroSDに書き込む
+                        if (is_in_sequence || !is_SD_on)
+                            canSend('F');
+                        else if (xTaskNotifyGive(makeParityTaskHandle))
                         {
-                            error_log("failed to Erase flash");
+                            error_log("failed to write SD");
                         }
                         break;
                     default:
+                        canSend('F');
                         break;
                     }
                 }
+                else
+                    canSend('F');
             }
             else
                 error_log("failed to read CAN");
