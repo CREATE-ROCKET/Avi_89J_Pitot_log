@@ -4,6 +4,7 @@
 #include "task_queue.h"
 #include <Arduino.h>
 #include "../common_task.h"
+#include "../task_queue.h"
 #include "flash.h"
 
 volatile SemaphoreHandle_t semaphore_flash;
@@ -21,9 +22,10 @@ volatile SemaphoreHandle_t semaphore_flash;
 
 CAN_CREATE CAN(true);
 
-TaskHandle_t canReceiveTask; // CANを受け取るタスク
-bool is_in_sequence;         // シークエンス中かどうか
-bool is_SD_on = true;        // SDが動作しているかどうか
+TaskHandle_t canReceiveTask;               // CANを受け取るタスク
+TaskHandle_t writeFlashDataToSDTaskHandle; // flashのデータをSDに書き込むタスク
+bool is_in_sequence;                       // シークエンス中かどうか
+bool is_SD_on = true;                      // SDが動作しているかどうか
 
 namespace can
 {
@@ -124,18 +126,12 @@ namespace can
                     case 'W': // フラッシュのデータをmicroSDに書き込む
                         if (is_in_sequence || !is_SD_on)
                             canSend('F');
-                        else if (xTaskNotifyGive(makeParityTaskHandle))
-                        {
-                            error_log("failed to write SD");
-                        }
+                        xTaskCreateUniversal(flash::writeFlashDataToSD, "writeFlashDataToSDTaskHandle", 4096, NULL, 6, writeFlashDataToSDTaskHandle, PRO_CPU_NUM);
                         break;
                     default:
-                        canSend('F');
                         break;
                     }
                 }
-                else
-                    canSend('F');
             }
             else
                 error_log("failed to read CAN");

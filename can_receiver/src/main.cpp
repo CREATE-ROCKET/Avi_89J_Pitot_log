@@ -1,110 +1,63 @@
+#include <CANCREATE.h>
 #include <Arduino.h>
-#include "CANCREATE.cpp"
 
-// ピトー管のデータの保存するstruct
-struct Data
-{
-    uint64_t time; // ESPタイマ初期化時からの経過時間 ms
-    float pa;      // 圧力
-    float temp;    // 温度
-};
+#define CAN_RX 17 // CAN ICのTXに接続しているピン
+#define CAN_TX 18 // CAN ICのRXに接続しているピン
 
-constexpr int numof_maxData = sizeof(Data) / sizeof(uint8_t);
-// CANで得られたデータを変換する union
-union PitotDataUnion
-{
-    Data pitotData;
-    uint8_t Uint8Data[numof_maxData];
-};
-
-constexpr int CAN_RX = 17;
-constexpr int CAN_TX = 18;
-
-CAN_CREATE CAN(true);
-bool is_receiving;
-int received_data_counter;
-PitotDataUnion pitot_data;
+CAN_CREATE CAN(true); // 旧ライブラリ互換かどうか決める trueで新ライブラリ用になる
 
 void setup()
 {
-    Serial.begin(115200);
-    while (Serial)
-        delay(10);
-    if (CAN.begin(100E3, CAN_RX, CAN_TX, 0))
-    {
-        Serial.println("failed to init can");
-        while (true)
-            ;
-    }
-    is_receiving = false;
-    Serial.println("success init");
+  Serial.begin(115200);
+  while (!Serial)
+    ;
+  delay(1000);
+
+  Serial.println("CAN Sender");
+  // start the CAN bus at 100 kbps
+  if (CAN.begin(100E3, CAN_RX, CAN_TX, 10))
+  {
+    Serial.println("Starting CAN failed!");
+    while (1)
+      ;
+  }
 }
 
 void loop()
 {
-    Serial.println("HELLO");
-    if (CAN.available())
+  if (CAN.available())
+  {
+    char Data[9]; // 最大8文字+改行文字が送信される
+    if (CAN.readLine(Data))
     {
-        can_return_t Data;
-        if (!CAN.readWithDetail(&Data))
-        {
-            if (Data.id == 2)
-            { // idが2の場合 ピトー管のデータを送信している
-                if (!is_receiving)
-                { // データを送信中でない場合
-                    if (Data.size == 1 &&
-                        *(Data.data) == '<')
-                    {
-                        is_receiving = true;
-                        received_data_counter = 0;
-                        Serial.println("receiving data...");
-                    }
-                }
-                else
-                { // データの受信中
-                    if (received_data_counter == 0 &&
-                        Data.size == 8)
-                    { // 最初のデータは8byte分あるはず
-                        memcpy(pitot_data.Uint8Data, Data.data, 8);
-                        received_data_counter++;
-                    }
-                    else if (received_data_counter == 1 &&
-                             Data.size == 4)
-                    { // 次のデータは4byte分あるはず
-                        memcpy(pitot_data.Uint8Data + 8, Data.data, 4);
-                        received_data_counter++;
-                    }
-                    else if (received_data_counter != 2 &&
-                             Data.size == 1)
-                    {
-                        if (*(Data.data) == '>')
-                        {
-                            Serial.println("success to receive");
-                            Serial.printf("time:%u ,pa: %g, temp: %g\n",
-                                          pitot_data.pitotData.time,
-                                          pitot_data.pitotData.pa,
-                                          pitot_data.pitotData.temp);
-                        }
-                        is_receiving = false;
-                    }
-                    else
-                        is_receiving = false;
-                }
-            }
-            if (Data.id == 1)
-            { // ピトー管基板の情報(生きてるかとか)用
-                if (Data.size == 1)
-                {
-                    Serial.printf("data: %c\n", Data.data[0]);
-                }
-            }
-        }
+      Serial.println("failed to get CAN data");
     }
-
-    if (Serial.available())
+    else
+      Serial.printf("Can received!!!: %s\r\n", Data);
+  }
+  if (Serial.available())
+  {
+    char data = Serial.peek(); // どの文字が入力されたかを確認(取り出さない)
+    if (data == '\n' || data == '\r')
     {
-        char data = Serial.read();
-        Serial.println(data);
-        CAN.sendChar(0, data);
+      Serial.read(); // 改行文字だったら取り出して捨てる
+      return;
     }
+    char cmd[9] = {};
+    for (int i = 0; i < 8; i++)
+    {
+      while (!Serial.available())
+        ;
+      char read = Serial.read();
+      if (read == '\n' || read == '\r')
+        break; // 改行文字だったら終了
+      cmd[i] = read;
+      Serial.print(read);
+    }
+    Serial.println();
+    if (CAN.sendLine(cmd))
+    {
+      Serial.println("failed to send CAN data");
+    }
+  }
 }

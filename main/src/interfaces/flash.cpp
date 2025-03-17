@@ -75,6 +75,20 @@ namespace flash
         return 0;
     }
 
+    int SPIFFS_init()
+    {
+        // 初期化されているため、ファイル名は0から始まる
+        FILE *numberHandle = fopen(num_path, "w");
+        if (!numberHandle)
+        {
+            pr_debug("%s cannot open", num_path);
+            return 1;
+        }
+        fprintf(numberHandle, "1");
+        SPIFFSpath = "/spiffs/data0.csv";
+        return 0;
+    }
+
     PitotDataUnion pitotData;
     uint8_t tmp[256];
     int get_old_data()
@@ -149,10 +163,10 @@ namespace flash
         else
             pr_debug("failed to read spiffs info: %s", esp_err_to_name(result));
 #endif
-        int result = makeNewFile();
-        if (result)
+        int makefileresult = makeNewFile();
+        if (makefileresult)
         {
-            pr_debug("failed to make new file in SPIFFS: %d", result);
+            pr_debug("failed to make new file in SPIFFS: %d", makefileresult);
         }
         return 0;
     }
@@ -207,6 +221,7 @@ namespace flash
             can::canSend('F');
             error_log("failed to format spiffs: %s", esp_err_to_name(result));
         }
+        SPIFFS_init();
 #endif
     }
 }

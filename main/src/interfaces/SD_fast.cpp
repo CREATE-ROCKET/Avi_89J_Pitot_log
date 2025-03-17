@@ -341,7 +341,7 @@ namespace sd_mmc
         }
         delete[] pitotData;
         SD_Data *data_wrapper = new SD_Data;
-        data_wrapper->is_log = false;
+        data_wrapper->type = data_type::data;
         data_wrapper->data = data;
         if (xQueueSend(ParityToSDQueue, &data_wrapper, 0) != pdTRUE)
         {
@@ -370,7 +370,7 @@ namespace sd_mmc
         if (xSemaphoreTake(semaphore_sd, 0) == pdTRUE)
         {
 #endif
-          if (!(data_wrapper->is_log))
+          if ((data_wrapper->type == data_type::data))
           {
 #if !defined(DEBUG) || defined(SD_FAST)
             int result = appendFile(dataFile, data_wrapper->data);

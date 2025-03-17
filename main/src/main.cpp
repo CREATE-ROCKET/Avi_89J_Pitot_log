@@ -142,7 +142,7 @@ void vApplicationStackOverflowHook(TaskHandle_t *xTask, portCHAR *taskname)
 // loop関数のスタックサイズを決める関数
 size_t getArduinoLoopTaskStackSize(void)
 {
-  return 8096; // weak attribute で定義されているため再定義している
+  return 8192; // weak attribute で定義されているため再定義している
 }
 
 void setup()
@@ -234,7 +234,7 @@ void setup()
   else
     digitalWrite(led::LED_CAN, HIGH);
 #endif
-  xTaskCreateUniversal(can::sendDataByCAN, "sendDataByCAN", 8096, NULL, 6, &sendDataByCanTaskHandle, PRO_CPU_NUM);
+  xTaskCreateUniversal(can::sendDataByCAN, "sendDataByCAN", 8192, NULL, 6, &sendDataByCanTaskHandle, PRO_CPU_NUM);
   can::canSend('i');
 #endif
 #if !defined(DEBUG) || defined(SD_FAST)
@@ -271,7 +271,7 @@ void setup()
   else
     digitalWrite(led::LED_FLASH, HIGH);
 #endif
-  xTaskCreateUniversal(flash::writeDataToFlash, "writeDataToFlash", 8096, NULL, 6, &writeDataToFlashTaskHandle, PRO_CPU_NUM);
+  xTaskCreateUniversal(flash::writeDataToFlash, "writeDataToFlash", 8192, NULL, 6, &writeDataToFlashTaskHandle, PRO_CPU_NUM);
 #endif
 
 #if !defined(DEBUG) || defined(PITOT)
@@ -297,11 +297,11 @@ void setup()
   }
   pr_debug("done all init");
 
-  xTaskCreateUniversal(sd_mmc::makeParity, "makeParity", 8096, NULL, 6, &makeParityTaskHandle, APP_CPU_NUM);
+  xTaskCreateUniversal(sd_mmc::makeParity, "makeParity", 8192, NULL, 6, &makeParityTaskHandle, APP_CPU_NUM);
 
-  xTaskCreateUniversal(sd_mmc::writeDataToSD, "writeDataToSD", 8096, NULL, 6, &writeDataToSDTaskHandle, APP_CPU_NUM);
+  xTaskCreateUniversal(sd_mmc::writeDataToSD, "writeDataToSD", 8192, NULL, 6, &writeDataToSDTaskHandle, APP_CPU_NUM);
 
-  xTaskCreateUniversal(task::distribute_data, "distributeData", 8096, NULL, 7, &sendDataToEveryICTaskHandle, APP_CPU_NUM);
+  xTaskCreateUniversal(task::distribute_data, "distributeData", 8192, NULL, 7, &sendDataToEveryICTaskHandle, APP_CPU_NUM);
 
   pr_debug("all done!!!");
 

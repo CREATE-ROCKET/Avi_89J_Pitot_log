@@ -128,9 +128,17 @@ struct Data
     float temp;   // 温度
 };
 
+enum struct data_type : uint8_t
+{
+    data,      // SDに書き込むデータ
+    log,       // SDに書き込むログ
+    spi_flash, // spi_flashに書き込まれているデータ
+    SPIFFS,    // 内蔵flashに書き込まれているデータ
+};
+
 struct SD_Data
 {
-    bool is_log;
+    data_type type;
     char *data;
 };
 
