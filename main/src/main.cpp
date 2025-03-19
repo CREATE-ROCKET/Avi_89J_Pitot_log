@@ -175,6 +175,9 @@ void setup()
   pr_feature_fg();
   pr_reset_reason();
 
+  Serial.printf("Chip model: %s, %u MHZ, %hu cores\n", ESP.getChipModel(), ESP.getCpuFreqMHz(), ESP.getChipCores());
+  Serial.printf("Free heap: %u / %u %u max block\n", ESP.getFreeHeap(), ESP.getHeapSize(), ESP.getMaxAllocHeap());
+  Serial.printf("Free PSRAM: %u / %u %u max block\n", ESP.getFreePsram(), ESP.getPsramSize(), ESP.getMaxAllocPsram());
 #endif
 #if IS_S3
   pinMode(led::LED, OUTPUT);

@@ -31,7 +31,7 @@
       }                                                                                                \
     }                                                                                                  \
     SD_Data *data_wrapper = new SD_Data;                                                               \
-    data_wrapper->type = data_type::log;                                                               \
+    data_wrapper->type = data_type::data_type_log;                                                     \
     data_wrapper->data = buffer;                                                                       \
     if (xQueueSend(ParityToSDQueue, &data_wrapper, 0) != pdPASS)                                       \
     {                                                                                                  \

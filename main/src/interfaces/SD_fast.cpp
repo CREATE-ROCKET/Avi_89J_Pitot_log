@@ -10,7 +10,7 @@
 
 String dataFile;
 String logFile;
-String SPIFFS_File;
+String SPIFFS_path;
 String SPIflashFile;
 volatile bool run_close_task = false;
 
@@ -263,24 +263,13 @@ namespace sd_mmc
     dataFileHandle.close();
     logFileHandle.close();
 
-    SPIFFS_File = "/internal_flash/data";
+    SPIFFS_path = "/internal_flash/data";
     SPIflashFile = "/SPIflash/data";
-    SPIFFS_File += number_path_csv;
+    SPIFFS_path += String(number);
     SPIflashFile += number_path_csv;
-    File internalSPIFileHandle = SD_MMC.open(SPIFFS_File, FILE_WRITE);
-    if (!internalSPIFileHandle)
-    {
-      pr_debug("failed to open file");
-      return 15;
-    }
-    if (!internalSPIFileHandle.print("time, pascal, temperature\n"))
-    {
-      pr_debug("failed to write file");
-      return 16;
-    }
-    internalSPIFileHandle.close();
+    SD_MMC.mkdir(SPIFFS_path);
 
-    File SPIflashFileHandle = SD_MMC.open(SPIFFS_File, FILE_WRITE);
+    File SPIflashFileHandle = SD_MMC.open(SPIflashFile, FILE_WRITE);
     if (!SPIflashFileHandle)
     {
       pr_debug("failed to open file");
@@ -339,7 +328,7 @@ namespace sd_mmc
         }
         delete[] pitotData;
         SD_Data *data_wrapper = new SD_Data;
-        data_wrapper->type = data_type::data;
+        data_wrapper->type = data_type::data_type_data;
         data_wrapper->data = data;
         if (xQueueSend(ParityToSDQueue, &data_wrapper, 10) != pdTRUE)
         {
@@ -369,7 +358,7 @@ namespace sd_mmc
         if (xSemaphoreTake(semaphore_sd, 0) == pdTRUE)
         {
 #endif
-          if ((data_wrapper->type == data_type::data))
+          if ((data_wrapper->type == data_type::data_type_data))
           {
 #if !defined(DEBUG) || defined(SD_FAST)
             int result = appendFile(dataFile, data_wrapper->data);
@@ -380,7 +369,7 @@ namespace sd_mmc
 #endif
             pr_debug("%s", data_wrapper->data);
           }
-          else
+          else if (data_wrapper->type == data_type::data_type_log)
           {
 #if !defined(DEBUG) || defined(SD_FAST)
             int result = appendFile(logFile, data_wrapper->data);
@@ -391,9 +380,35 @@ namespace sd_mmc
 #endif
             pr_debug("log: %s", data_wrapper->data);
           }
-
-          delete[] data_wrapper->data;
+#if !defined(DEBUG) || defined(SD_FAST)
+          else if (data_wrapper->type == data_type::data_type_spi_flash)
+          {
+            int result = appendFile(SPIflashFile, data_wrapper->data);
+            if (result)
+            {
+              pr_debug("failed to write SD: %d", result);
+            }
+          }
+          else
+          { // SPIFFSのデータ
+            int filename = data_wrapper->type - data_type::data_type_SPIFFS;
+            String filepath = SPIFFS_path + "/data" + String(filename) + ".csv";
+            int result = appendFile(filepath, data_wrapper->data);
+            if (result)
+            {
+              pr_debug("failed to write SD: %d", result);
+            }
+          }
+#endif
           delete data_wrapper;
+          if (data_wrapper->type != data_type::data_type_SPIFFS)
+          {
+            delete[] data_wrapper->data;
+          }
+          else
+          {
+            free(data_wrapper->data);
+          }
 #if !defined(DEBUG) || defined(SD_FAST)
         }
         xSemaphoreGive(semaphore_sd);
