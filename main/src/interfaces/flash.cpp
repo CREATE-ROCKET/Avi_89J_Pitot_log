@@ -6,6 +6,7 @@
 #include <SPIFFS.h>
 #include <FS.h>
 #include <esp_heap_caps.h>
+#include <esp_task_wdt.h>
 #include "task_queue.h"
 #include "common_task.h"
 #include "CAN_MCP2562.h"
@@ -49,7 +50,7 @@ namespace flash
             }
             if (!number_txt.length())
             {
-                pr_debug("number.txt maybe broken");
+                pr_debug("number.txt maybe broken: %s", number_txt.c_str());
                 return 1;
             }
             number = number_txt.toInt();
@@ -95,14 +96,19 @@ namespace flash
     int SPIFFS_init()
     {
         // 初期化されているため、ファイル名は0から始まる
-        FILE *numberHandle = fopen(num_path, "w");
+        File numberHandle = SPIFFS.open(num_path, "w");
         if (!numberHandle)
         {
             pr_debug("%s cannot open", num_path);
             return 1;
         }
-        fprintf(numberHandle, "1");
-        SPIFFSpath = "/spiffs/0.csv";
+        if (!numberHandle.print("1"))
+        {
+            pr_debug("failed to write file");
+            return 2;
+        }
+        numberHandle.close();
+        SPIFFSpath = "/0.csv";
         pr_debug("SPIFFS path: %s", SPIFFSpath.c_str());
         File tmp = SPIFFS.open(SPIFFSpath, FILE_WRITE);
         if (!tmp)
@@ -253,7 +259,7 @@ namespace flash
             return 1;
         }
         flash1.begin(&SPIC1, CS, SPIFREQ);
-        if (!SPIFFS.begin())
+        if (!SPIFFS.begin(true))
         {
             pr_debug("Failed to init SPIFFS");
             return 2;
@@ -322,14 +328,18 @@ namespace flash
     void eraseFlash()
     {
 #if !defined(DEBUG) || defined(SPIFLASH)
+        esp_task_wdt_delete(xTaskGetCurrentTaskHandle());
         flash1.erase();
         position = 0;
+        can::canSend('1');
         if (!SPIFFS.format())
         {
             can::canSend('F');
             error_log("failed to format SPIFFS");
         }
-        int hoge = makeNewFile();
+        esp_task_wdt_add(xTaskGetCurrentTaskHandle());
+        can::canSend('2');
+        int hoge = SPIFFS_init();
         if (hoge)
         {
             can::canSend('F');

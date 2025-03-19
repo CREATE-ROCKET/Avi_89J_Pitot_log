@@ -41,7 +41,7 @@ namespace can
             pr_debug("Start Can failed");
             return 1; // CAN.begin() failed
         }
-        xTaskCreateUniversal(can::canReceive, "canReceive", 2048, NULL, 6, &canReceiveTask, APP_CPU_NUM);
+        xTaskCreateUniversal(can::canReceive, "canReceive", 4096, NULL, 6, &canReceiveTask, APP_CPU_NUM);
         if (!semaphore_flash)
         {
             pr_debug("failed to Start Can");
@@ -148,6 +148,8 @@ namespace can
             }
             else
                 error_log("failed to read CAN");
+
+            delay(100);
         }
     }
 }
