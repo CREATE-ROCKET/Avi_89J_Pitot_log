@@ -59,12 +59,13 @@ namespace can
             if (xQueueReceive(DistributeToCanQueue, &tmp, portMAX_DELAY) == pdTRUE)
             {
                 CAN.sendChar(2, '<');
-                for (int i = 0; i < sizeof(Data) / sizeof(uint8_t); i++)
+                for (int i = 0; i < sizeof(Data) / sizeof(uint8_t) / 8; i++)
                 {
                     CAN.sendData(2, tmp + i * 8, 8);
                     delay(10);
                 }
                 CAN.sendChar(2, '>');
+                delete[] tmp;
                 delay(10);
             }
         }
@@ -75,7 +76,7 @@ namespace can
         for (;;)
         {
             can_return_t Data;
-            if (CAN.readWithDetail(&Data, portMAX_DELAY))
+            if (!CAN.readWithDetail(&Data, portMAX_DELAY))
             {
                 if (Data.size == 1)
                 {
@@ -83,7 +84,8 @@ namespace can
                     switch (Data.data[0])
                     {
                     case 'S': // シーケンス開始
-                        if (!is_in_sequence)
+                        pr_debug("S");
+                        if (is_in_sequence)
                             canSend('F');
                         else if (xSemaphoreGive(semaphore_flash) != pdTRUE)
                         {
@@ -92,7 +94,8 @@ namespace can
                         is_in_sequence = true;
                         break;
                     case 'Q': // シーケンス停止
-                        if (is_in_sequence)
+                        pr_debug("Q");
+                        if (!is_in_sequence)
                             canSend('F');
                         if (xSemaphoreTake(semaphore_flash, portMAX_DELAY) != pdTRUE)
                         {
@@ -101,6 +104,7 @@ namespace can
                         is_in_sequence = false;
                         break;
                     case 'K': // microSD停止
+                        pr_debug("K");
                         if (is_in_sequence)
                             canSend('F');
                         else if (xSemaphoreTake(semaphore_sd, portMAX_DELAY) != pdTRUE)
@@ -118,15 +122,24 @@ namespace can
                         }
                         break;
                     case 'E': // フラッシュ削除
+                        pr_debug("E");
                         if (is_in_sequence)
                             canSend('F');
                         flash::eraseFlash();
                         canSend('s');
                         break;
                     case 'W': // フラッシュのデータをmicroSDに書き込む
+                        pr_debug("W");
                         if (is_in_sequence || !is_SD_on)
                             canSend('F');
-                        xTaskCreateUniversal(flash::writeFlashDataToSD, "writeFlashDataToSDTaskHandle", 4096, NULL, 6, writeFlashDataToSDTaskHandle, PRO_CPU_NUM);
+#if !defined(DEBUG) || defined(SPIFLASH)
+                        xTaskCreateUniversal(
+                            flash::writeFlashDataToSD,
+                            "writeFlashDataToSDTaskHandle",
+                            4096, NULL, 6,
+                            &writeFlashDataToSDTaskHandle, PRO_CPU_NUM);
+#endif
+                        canSend('W');
                         break;
                     default:
                         break;

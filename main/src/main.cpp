@@ -58,6 +58,13 @@ QueueHandle_t DistributeToParityQueue; // sendDataからParityにデータを渡
 QueueHandle_t ParityToSDQueue;         // ParityからSDにデータを渡すQueue
 QueueHandle_t DistributeToCanQueue;    // sendDataからCanにデータを渡すQueue
 
+// 初期化が成功したかどうかを表す
+// pitotが0
+// SDが1
+// flashが2
+// CANが3
+uint8_t IsInitSuccess = 0;
+
 #ifdef DEBUG
 
 void pr_feature_fg()
@@ -190,11 +197,6 @@ void setup()
   digitalWrite(led::LED2, HIGH);
 #endif
 
-  // ウォッチドッグタイマーを有効化する
-  TaskHandle_t watchdog = xTaskGetIdleTaskHandle();
-  if (!watchdog || esp_task_wdt_add(watchdog) != ESP_OK)
-    pr_debug("failed to enable watch dog timer");
-
   // Queue作成 error_logを利用したいので上に置いてる
   PitotToDistributeQueue = xQueueCreate(20, sizeof(Data *));
   ParityToSDQueue = xQueueCreate(30, sizeof(char *));
@@ -230,11 +232,14 @@ void setup()
   {
     error_log("can_init failed: %d", result);
   }
-#if IS_S3
   else
+  {
+#if IS_S3
     digitalWrite(led::LED_CAN, HIGH);
 #endif
-  xTaskCreateUniversal(can::sendDataByCAN, "sendDataByCAN", 8192, NULL, 6, &sendDataByCanTaskHandle, PRO_CPU_NUM);
+    xTaskCreateUniversal(can::sendDataByCAN, "sendDataByCAN", 8192, NULL, 6, &sendDataByCanTaskHandle, PRO_CPU_NUM);
+    IsInitSuccess += 1 << 3;
+  }
   can::canSend('i');
 #endif
 #if !defined(DEBUG) || defined(SD_FAST)
@@ -244,20 +249,27 @@ void setup()
     pr_debug("SD_init failed: %d", result);
     ++error_num;
   }
-#if IS_S3
   else
+  {
+#if IS_S3
     digitalWrite(led::LED_SD, HIGH);
 #endif
-  result = sd_mmc::makeNewFile();
-  if (result)
-  {
-    pr_debug("Can't make new file: %d", result);
-  }
+    result = sd_mmc::makeNewFile();
+    if (result)
+    {
+      pr_debug("Can't make new file: %d", result);
+    }
+    else
+    {
 #if IS_S3
-  attachInterrupt(digitalPinToInterrupt(debug::DEBUG_INPUT1), sd_mmc::onButton, RISING);
+      attachInterrupt(digitalPinToInterrupt(debug::DEBUG_INPUT1), sd_mmc::onButton, RISING);
 #else
-  attachInterrupt(digitalPinToInterrupt(debug::DEBUG_INPUT), sd_mmc::onButton, RISING);
+      attachInterrupt(digitalPinToInterrupt(debug::DEBUG_INPUT), sd_mmc::onButton, RISING);
 #endif
+      xTaskCreateUniversal(sd_mmc::writeDataToSD, "writeDataToSD", 8192, NULL, 6, &writeDataToSDTaskHandle, APP_CPU_NUM);
+      IsInitSuccess += 1 << 1;
+    }
+  }
 #endif
 
 #if !defined(DEBUG) || defined(SPIFLASH)
@@ -267,11 +279,14 @@ void setup()
     error_log("flash_init failed: %d", result);
     ++error_num;
   }
-#if IS_S3
   else
+  {
+#if IS_S3
     digitalWrite(led::LED_FLASH, HIGH);
 #endif
-  xTaskCreateUniversal(flash::writeDataToFlash, "writeDataToFlash", 8192, NULL, 6, &writeDataToFlashTaskHandle, PRO_CPU_NUM);
+    xTaskCreateUniversal(flash::writeDataToFlash, "writeDataToFlash", 8192, NULL, 6, &writeDataToFlashTaskHandle, PRO_CPU_NUM);
+    IsInitSuccess += 1 << 2;
+  }
 #endif
 
 #if !defined(DEBUG) || defined(PITOT)
@@ -281,11 +296,14 @@ void setup()
     error_log("pitot_init failed: %d", result);
     error_num += 2;
   }
-#if IS_S3
   else
+  {
+#if IS_S3
     digitalWrite(led::LED_PITOT, HIGH);
 #endif
-  xTaskCreateUniversal(pitot::getPitotData, "getPitotDataTask", 2048, NULL, 8, &getPitotDataTaskHandle, PRO_CPU_NUM);
+    xTaskCreateUniversal(pitot::getPitotData, "getPitotDataTask", 2048, NULL, 8, &getPitotDataTaskHandle, PRO_CPU_NUM);
+    IsInitSuccess += 1;
+  }
 #else
   xTaskCreateUniversal(task::createData, "createDataForTest", 2048, NULL, 8, &getPitotDataTaskHandle, PRO_CPU_NUM);
 #endif
@@ -293,13 +311,11 @@ void setup()
   if (error_num >= 2)
   {
     error_log("fatal error occurred!! rebooting ....");
-    ESP.restart(); // 再起動する
+    esp_restart(); // 再起動する
   }
   pr_debug("done all init");
 
   xTaskCreateUniversal(sd_mmc::makeParity, "makeParity", 8192, NULL, 6, &makeParityTaskHandle, APP_CPU_NUM);
-
-  xTaskCreateUniversal(sd_mmc::writeDataToSD, "writeDataToSD", 8192, NULL, 6, &writeDataToSDTaskHandle, APP_CPU_NUM);
 
   xTaskCreateUniversal(task::distribute_data, "distributeData", 8192, NULL, 7, &sendDataToEveryICTaskHandle, APP_CPU_NUM);
 

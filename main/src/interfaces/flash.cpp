@@ -20,7 +20,7 @@ Flash flash1;
 constexpr int data_size = numof_maxData * (sizeof(Data) / sizeof(uint8_t));
 constexpr int FLASH_BLOCK_SIZE = 0x100;
 constexpr uint32_t SPI_FLASH_MAX_ADDRESS = 0x2000000;
-constexpr char *num_path = "/spiffs/number.txt";
+constexpr char num_path[] = "/spiffs/number.txt";
 
 String SPIFFSpath;
 
@@ -38,7 +38,6 @@ namespace flash
         using namespace std;
         int number = 0;
         FILE *numberHandle = fopen(num_path, "r");
-
         if (numberHandle)
         {
             // /spiffs/number.txt ファイルが存在する場合読み取る
@@ -56,13 +55,14 @@ namespace flash
                 pr_debug("failed to convert to int");
                 return 3;
             }
-            if (tmp == fileContent || *tmp != '\n' && *tmp != '\0')
+            if (tmp == fileContent || (*tmp != '\n' && *tmp != '\0'))
                 pr_debug("\e[31mデータが破損している可能性があります\e[37m");
         }
         else
             // ファイルがないはず
             pr_debug("Cannot find number.txt assume the SPIFFS is init. creating...");
-        numberHandle = freopen(num_path, "w", numberHandle);
+        fclose(numberHandle);
+        numberHandle = fopen(num_path, "w");
         if (!numberHandle)
         {
             pr_debug("failed to open file for writing");
@@ -91,7 +91,7 @@ namespace flash
 
     PitotDataUnion pitotData;
     uint8_t tmp[256];
-    int get_old_data()
+    int get_flash_old_data()
     {
         pr_debug("getting old flash data...");
         int position = 0;
@@ -116,8 +116,15 @@ namespace flash
                         pr_debug("nullptr found");
                         return 1; // cannot do new
                     }
-                    pr_debug("%s", data);
-                    delete[] data;
+                    SD_Data *data_wrapper = new SD_Data;
+                    data_wrapper->type = data_type::spi_flash;
+                    data_wrapper->data = data;
+                    if (xQueueSend(ParityToSDQueue, &data_wrapper, 100) != pdTRUE)
+                    {
+                        delete[] data;
+                        delete data_wrapper;
+                        return 2;
+                    }
                     position += FLASH_BLOCK_SIZE;
                     break;
                 }
@@ -126,23 +133,28 @@ namespace flash
         return 0;
     }
 
+    int get_SPIFFS_old_data()
+    {
+        return 0;
+    }
+
     int init()
     {
         SPIC1.begin(SPI2_HOST, CLK, MISO, MOSI);
         flash1.begin(&SPIC1, CS, SPIFREQ);
-        esp_vfs_spiffs_conf_t configSPIFFS = {
+        esp_vfs_spiffs_conf_t conf = {
             .base_path = "/spiffs",
             .partition_label = NULL,
             .max_files = 5,
-            .format_if_mount_failed = false,
-        };
-        esp_err_t result = esp_vfs_spiffs_register(&configSPIFFS);
+            .format_if_mount_failed = true};
+
+        esp_err_t result = esp_vfs_spiffs_register(&conf);
         if (result != ESP_OK)
         {
             pr_debug("failed to init SPIFFS: %s", esp_err_to_name(result));
             return 1;
         }
-        result = esp_spiffs_check(configSPIFFS.base_path);
+        result = esp_spiffs_check(conf.partition_label);
         if (result != ESP_OK)
         {
             pr_debug("failed to check SPIFFS: %s", esp_err_to_name(result));
@@ -150,15 +162,10 @@ namespace flash
         }
 #ifdef DEBUG
         size_t total, used;
-        result = esp_spiffs_info(configSPIFFS.base_path, &total, &used);
+        result = esp_spiffs_info(conf.base_path, &total, &used);
         if (result != ESP_OK)
         {
             pr_debug("SPIFFS\n\ttotal size:%u\nused size:\t%u", total, used);
-            if (total < used)
-            {
-                pr_debug("used size is bigger than the total size is crazy");
-                return 1;
-            }
         }
         else
             pr_debug("failed to read spiffs info: %s", esp_err_to_name(result));
@@ -199,6 +206,17 @@ namespace flash
             }
         }
     }
+
+    void writeFlashDataToSD(void *pvParameter)
+    {
+        int result = get_flash_old_data();
+        if (result)
+            can::canSend('0' + result);
+        result = get_SPIFFS_old_data();
+        if (result)
+            can::canSend('0' + result);
+        vTaskDelete(NULL);
+    }
 }
 
 #endif
@@ -213,7 +231,7 @@ namespace flash
         TaskHandle_t tmp = xTaskGetIdleTaskHandle();
         if (!tmp || esp_task_wdt_delete(tmp) != ESP_OK)
             pr_debug("failed to disable watch dog timer");
-        esp_err_t result = esp_spiffs_format("/spiffs");
+        esp_err_t result = esp_spiffs_format(NULL);
         if (!tmp || esp_task_wdt_add(tmp) != ESP_OK)
             pr_debug("failed to enable watchdog timer");
         if (result)
@@ -221,7 +239,12 @@ namespace flash
             can::canSend('F');
             error_log("failed to format spiffs: %s", esp_err_to_name(result));
         }
-        SPIFFS_init();
+        int hoge = makeNewFile();
+        if (hoge)
+        {
+            can::canSend('F');
+            error_log("failed to make new file: %d", hoge);
+        }
 #endif
     }
 }

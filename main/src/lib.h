@@ -160,4 +160,6 @@ constexpr int numof_maxData = numof_writeData / (sizeof(Data) / sizeof(uint8_t))
 constexpr int bufferSize = 40;
 constexpr int AllbufferSize = numof_maxData * bufferSize + 1;
 
+extern uint8_t IsInitSuccess; // 初期化が成功したかどうかを表す
+
 #endif

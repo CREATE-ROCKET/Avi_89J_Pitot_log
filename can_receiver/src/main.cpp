@@ -1,8 +1,8 @@
 #include <CANCREATE.h>
 #include <Arduino.h>
 
-#define CAN_RX 17 // CAN ICのTXに接続しているピン
-#define CAN_TX 18 // CAN ICのRXに接続しているピン
+#define CAN_RX 33 // CAN ICのTXに接続しているピン
+#define CAN_TX 25 // CAN ICのRXに接続しているピン
 
 CAN_CREATE CAN(true); // 旧ライブラリ互換かどうか決める trueで新ライブラリ用になる
 
@@ -20,6 +20,24 @@ void setup()
     Serial.println("Starting CAN failed!");
     while (1)
       ;
+  }
+  delay(1000);
+  switch (CAN.test())
+  {
+  case CAN_SUCCESS:
+    Serial.println("Success!!!");
+    break;
+  case CAN_UNKNOWN_ERROR:
+    Serial.println("Unknown error occurred");
+    break;
+  case CAN_NO_RESPONSE_ERROR:
+    Serial.println("No response error");
+    break;
+  case CAN_CONTROLLER_ERROR:
+    Serial.println("CAN CONTROLLER ERROR");
+    break;
+  default:
+    break;
   }
 }
 

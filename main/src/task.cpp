@@ -13,6 +13,9 @@ namespace task
     {
         Data *pitotData = new Data[numof_maxData];
         int counter = 0;
+        const bool is_flash_on = (IsInitSuccess & (1 << 2)) != 0;
+        const bool is_sd_on = (IsInitSuccess & (1 << 1)) != 0;
+        const bool is_can_on = (IsInitSuccess & (1 << 3)) != 0;
         while (true)
         {
             Data *tmp_data = nullptr;
@@ -26,25 +29,32 @@ namespace task
                 if (counter >= numof_maxData) // 一度に送信するタスク
                 {
                     counter = 0;
-                    xQueueSend(DistributeToParityQueue, &pitotData, 0);
 #if !defined(DEBUG) || defined(SPIFLASH)
-#ifdef CAN_MCP2562
-                    if (xSemaphoreTake(semaphore_flash, 0) == pdTRUE)
-#endif
+                    if (is_flash_on)
                     {
-                        Data *pitotData_flash = new Data[numof_maxData];
-                        memcpy(pitotData_flash, pitotData, sizeof(Data) * numof_maxData);
-                        xQueueSend(DistributeToFlashQueue, &pitotData_flash, 0);
-#ifdef CAN_MCP2562
-                        xSemaphoreGive(semaphore_flash);
+#if !defined(DEBUG) || defined(CAN_MCP2562)
+                        if (xSemaphoreTake(semaphore_flash, 0) == pdTRUE)
 #endif
+                        {
+                            Data *pitotData_flash = new Data[numof_maxData];
+                            memcpy(pitotData_flash, pitotData, sizeof(Data) * numof_maxData);
+                            xQueueSend(DistributeToFlashQueue, &pitotData_flash, 0);
+#if !defined(DEBUG) || defined(CAN_MCP2562)
+                            xSemaphoreGive(semaphore_flash);
+#endif
+                        }
                     }
 #endif
 #if defined(CAN_MCP2562) || !defined(DEBUG)
-                    Data *pitotData_can = new Data;
-                    *pitotData_can = pitotData[0];
-                    xQueueSend(DistributeToCanQueue, &pitotData_can, 0);
+                    if (is_can_on)
+                    {
+                        Data *pitotData_can = new Data;
+                        *pitotData_can = pitotData[0];
+                        xQueueSend(DistributeToCanQueue, &pitotData_can, 0);
+                    }
 #endif
+                    if (is_sd_on)
+                        xQueueSend(DistributeToParityQueue, &pitotData, 0);
                     pitotData = new Data[numof_maxData];
                 }
             }

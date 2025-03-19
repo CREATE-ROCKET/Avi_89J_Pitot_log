@@ -64,7 +64,6 @@ namespace sd_mmc
   int appendFile(String path, const char *message)
   {
     pr_debug("Appending to file: %s", path.c_str());
-    int64_t sd_write_time = esp_timer_get_time();
     File file = SD_MMC.open(path, FILE_APPEND);
     if (!file)
     {
@@ -77,7 +76,6 @@ namespace sd_mmc
       return 2; // failed to append file
     }
     file.close();
-    pr_debug("write time: %lld ms", esp_timer_get_time() - sd_write_time);
     return 0;
   }
 
@@ -343,10 +341,11 @@ namespace sd_mmc
         SD_Data *data_wrapper = new SD_Data;
         data_wrapper->type = data_type::data;
         data_wrapper->data = data;
-        if (xQueueSend(ParityToSDQueue, &data_wrapper, 0) != pdTRUE)
+        if (xQueueSend(ParityToSDQueue, &data_wrapper, 10) != pdTRUE)
         {
           pr_debug("failed to send parity to sd queue");
           delete data_wrapper;
+          delete[] data_wrapper->data;
         }
       }
       else
