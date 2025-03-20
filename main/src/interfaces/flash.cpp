@@ -1,9 +1,10 @@
-#include <S25FL127S 1.0.0/src/SPIflash.h>
 #include "flash.h"
-#include "lib.h"
+#include <lib.h>
 #include "debug.h"
+#include "S25FL127S 1.0.0/src/SPIflash.h"
 #include <Arduino.h>
 #include "task_queue.h"
+#include "common_task.h"
 
 #if !defined(DEBUG) || defined(SPIFLASH)
 
@@ -12,20 +13,60 @@
 SPICREATE::SPICreate SPIC1;
 Flash flash1;
 
-constexpr int data_size = numof_maxData * (sizeof(Data) / sizeof(uint8_t));
-int position = 0; // SPIflashの書き込み位置
+constexpr uint32_t data_size = numof_maxData * (sizeof(Data) / sizeof(uint8_t));
 constexpr uint32_t FLASH_BLOCK_SIZE = 0x100;
-constexpr uint32_t SPI_FLASH_MAX_ADDRESS = 0x2000000;
+uint32_t counter = 0;
+
+// Flashから読み取った値をData型に変換する
+union PitotDataUnion
+{
+    Data pitotData[numof_maxData];
+    uint8_t Uint8Data[numof_maxData * (sizeof(Data) / sizeof(uint8_t))];
+};
 
 namespace flash
 {
+    PitotDataUnion pitotData;
+    uint8_t tmp[256];
+    int get_old_data()
+    {
+        pr_debug("getting old flash data...");
+        int counter = 0;
+        bool is_remaining;
+        do
+        {
+            is_remaining = false;
+            flash1.read(counter, tmp);
+            for (int i = 0; i < 256; i++)
+            {
+                if (tmp[i] != 255)
+                {
+                    is_remaining = true;
+                    for (int j = 0; j < data_size; j++)
+                    {
+                        pitotData.Uint8Data[j] = tmp[j];
+                        pr_debug("%u, ", tmp[i]);
+                    }
+                    char *data = cmn_task::DataToChar(pitotData.pitotData);
+                    if (!data)
+                    {
+                        pr_debug("nullptr found");
+                        return 1; // cannot do new
+                    }
+                    pr_debug("%s", data);
+                    delete[] data;
+                    counter += FLASH_BLOCK_SIZE;
+                    break;
+                }
+            }
+        } while (is_remaining);
+        return 0;
+    }
+
+    // setup内で実行 エラー処理なし
     int init()
     {
-        if (!SPIC1.begin(SPI2_HOST, CLK, MISO, MOSI))
-        {
-            pr_debug("Failed to init spi bus");
-            return 1;
-        }
+        SPIC1.begin(SPI2_HOST, CLK, MISO, MOSI);
         flash1.begin(&SPIC1, CS, SPIFREQ);
         return 0;
     }
@@ -39,31 +80,19 @@ namespace flash
         while (true)
         {
             // numof_maxData個だけDataが送られてくるので、あまりを0埋めして保存
-            uint8_t *pitotData = nullptr;
+            uint8_t *tmp = nullptr;
             // Queueにデータがくるまで待つ
-            if (xQueueReceive(DistributeToFlashQueue, &pitotData, portMAX_DELAY) == pdTRUE)
+            if (xQueueReceive(DistributeToFlashQueue, &tmp, portMAX_DELAY) == pdTRUE)
             {
-                if (position >= SPI_FLASH_MAX_ADDRESS)
-                {
-                    error_log("all flash used!!!");
-                    continue;
-                }
-                flash1.write(position, pitotData);
-                delete[] pitotData;
-                position += FLASH_BLOCK_SIZE;
+                flash1.write(counter, tmp);
+                delete[] tmp;
+                counter += FLASH_BLOCK_SIZE;
+            }
+            else
+            {
+                pr_debug("failed to receive DistributeToFlashQueue");
             }
         }
-    }
-
-    void writeFlashDataToSD(void *pvParameter)
-    {
-        // int result = get_flash_old_data();
-        // if (result)
-        //     can::canSend('0' + result);
-        // // result = get_SPIFFS_old_data();
-        // if (result)
-        //     can::canSend('0' + result);
-        vTaskDelete(NULL);
     }
 }
 
@@ -75,7 +104,7 @@ namespace flash
     {
 #if !defined(DEBUG) || defined(SPIFLASH)
         flash1.erase();
-        position = 0;
+        counter = 0;
 #endif
     }
 }

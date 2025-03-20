@@ -104,10 +104,10 @@ namespace can
                         is_in_sequence = false;
                         break;
                     case 'K': // microSD停止
-                        pr_debug("stop micro SD");
+                        error_log("stop micro SD");
                         if (is_in_sequence)
                             canSend('F');
-                        else if (xSemaphoreTake(semaphore_sd, portMAX_DELAY) != pdTRUE)
+                        else if (xSemaphoreTake(semaphore_sd, 1000) != pdTRUE)
                         {
                             error_log("failed to End SD");
                         }
@@ -135,13 +135,16 @@ namespace can
                         pr_debug("W");
                         if (is_in_sequence || !is_SD_on)
                             canSend('F');
+                        else
+                        {
 #if !defined(DEBUG) || defined(SPIFLASH)
-                        xTaskCreateUniversal(
-                            flash::writeFlashDataToSD,
-                            "writeFlashDataToSDTaskHandle",
-                            4096, NULL, 6,
-                            &writeFlashDataToSDTaskHandle, PRO_CPU_NUM);
+                            xTaskCreateUniversal(
+                                flash::writeFlashDataToSD,
+                                "writeFlashDataToSDTaskHandle",
+                                4096, NULL, 6,
+                                &writeFlashDataToSDTaskHandle, PRO_CPU_NUM);
 #endif
+                        }
                         break;
                     case 's':
                         pr_debug("pitot start");
