@@ -6,6 +6,8 @@
 #include "task_queue.h"
 #include "common_task.h"
 
+volatile SemaphoreHandle_t semaphore_sd;
+
 #if !defined(DEBUG) || defined(SD_FAST)
 
 String dataFile;
@@ -15,7 +17,6 @@ String SPIflashFile;
 volatile bool run_close_task = false;
 
 //  DEBUGINPUTがRiseされたとき、別のタスクに取られてwriteDataToSDTaskがこれ以上動作しないようにする
-volatile SemaphoreHandle_t semaphore_sd;
 TaskHandle_t GetSDSemaphoreHandle;
 
 namespace sd_mmc

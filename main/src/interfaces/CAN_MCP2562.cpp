@@ -84,7 +84,7 @@ namespace can
                     switch (Data.data[0])
                     {
                     case 'S': // シーケンス開始
-                        pr_debug("S");
+                        pr_debug("start sequence");
                         if (is_in_sequence)
                             canSend('F');
                         else if (xSemaphoreGive(semaphore_flash) != pdTRUE)
@@ -94,17 +94,17 @@ namespace can
                         is_in_sequence = true;
                         break;
                     case 'Q': // シーケンス停止
-                        pr_debug("Q");
+                        pr_debug("quit sequence");
                         if (!is_in_sequence)
                             canSend('F');
-                        if (xSemaphoreTake(semaphore_flash, portMAX_DELAY) != pdTRUE)
+                        else if (xSemaphoreTake(semaphore_flash, portMAX_DELAY) != pdTRUE)
                         {
                             error_log("failed to End Sequence");
                         }
                         is_in_sequence = false;
                         break;
                     case 'K': // microSD停止
-                        pr_debug("K");
+                        pr_debug("stop micro SD");
                         if (is_in_sequence)
                             canSend('F');
                         else if (xSemaphoreTake(semaphore_sd, portMAX_DELAY) != pdTRUE)
@@ -122,11 +122,14 @@ namespace can
                         }
                         break;
                     case 'E': // フラッシュ削除
-                        pr_debug("E");
+                        pr_debug("erasing flash");
                         if (is_in_sequence)
                             canSend('F');
-                        flash::eraseFlash();
-                        canSend('s');
+                        else
+                        {
+                            flash::eraseFlash();
+                            canSend('s');
+                        }
                         break;
                     case 'W': // フラッシュのデータをmicroSDに書き込む
                         pr_debug("W");
@@ -139,7 +142,11 @@ namespace can
                             4096, NULL, 6,
                             &writeFlashDataToSDTaskHandle, PRO_CPU_NUM);
 #endif
-                        canSend('W');
+                        break;
+                    case 's':
+                        pr_debug("pitot start");
+                        xTaskNotifyGive(getPitotDataTaskHandle);
+                        canSend('s');
                         break;
                     default:
                         break;

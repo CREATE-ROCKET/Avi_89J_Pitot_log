@@ -42,6 +42,7 @@
 #include "interfaces/SD_fast.h"
 #include "interfaces/flash.h"
 #include "interfaces/CAN_MCP2562.h"
+#include "freertos/task.h"
 
 // task handle
 TaskHandle_t getPitotDataTaskHandle;      // pitotからデータを取得し、それをsendDataToEveryICへ送る 優先度 -1
@@ -240,7 +241,7 @@ void setup()
 #if IS_S3
     digitalWrite(led::LED_CAN, HIGH);
 #endif
-    xTaskCreateUniversal(can::sendDataByCAN, "sendDataByCAN", 8192, NULL, 6, &sendDataByCanTaskHandle, PRO_CPU_NUM);
+    xTaskCreateUniversal(can::sendDataByCAN, "sendDataByCAN", 8192, NULL, 6, &sendDataByCanTaskHandle, APP_CPU_NUM);
     IsInitSuccess += 1 << 3;
   }
   can::canSend('i');
@@ -293,20 +294,11 @@ void setup()
 #endif
 
 #if !defined(DEBUG) || defined(PITOT)
-  result = pitot::init();
-  if (result)
-  {
-    error_log("pitot_init failed: %d", result);
-    error_num += 2;
-  }
-  else
-  {
 #if IS_S3
-    digitalWrite(led::LED_PITOT, HIGH);
+  digitalWrite(led::LED_PITOT, HIGH);
 #endif
-    xTaskCreateUniversal(pitot::getPitotData, "getPitotDataTask", 2048, NULL, 8, &getPitotDataTaskHandle, PRO_CPU_NUM);
-    IsInitSuccess += 1;
-  }
+  xTaskCreateUniversal(pitot::getPitotData, "getPitotDataTask", 4096, NULL, 8, &getPitotDataTaskHandle, PRO_CPU_NUM);
+  IsInitSuccess += 1;
 #else
   xTaskCreateUniversal(task::createData, "createDataForTest", 2048, NULL, 8, &getPitotDataTaskHandle, PRO_CPU_NUM);
 #endif

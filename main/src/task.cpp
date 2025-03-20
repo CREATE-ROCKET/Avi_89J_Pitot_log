@@ -33,16 +33,16 @@ namespace task
                     if (is_flash_on)
                     {
 #if !defined(DEBUG) || defined(CAN_MCP2562)
-                        if (xSemaphoreTake(semaphore_flash, 0) == pdTRUE)
+                        // if (xSemaphoreTake(semaphore_flash, 0) == pdTRUE)
 #endif
-                        {
-                            Data *pitotData_flash = new Data[numof_maxData];
-                            memcpy(pitotData_flash, pitotData, sizeof(Data) * numof_maxData);
-                            xQueueSend(DistributeToFlashQueue, &pitotData_flash, 0);
+                        //{
+                        Data *pitotData_flash = new Data[numof_maxData];
+                        memcpy(pitotData_flash, pitotData, sizeof(Data) * numof_maxData);
+                        xQueueSend(DistributeToFlashQueue, &pitotData_flash, 0);
 #if !defined(DEBUG) || defined(CAN_MCP2562)
-                            xSemaphoreGive(semaphore_flash);
+                        // xSemaphoreGive(semaphore_flash);
 #endif
-                        }
+                        //}
                     }
 #endif
 #if defined(CAN_MCP2562) || !defined(DEBUG)
