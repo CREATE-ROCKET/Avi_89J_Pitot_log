@@ -15,7 +15,9 @@ Flash flash1;
 
 constexpr uint32_t data_size = numof_maxData * (sizeof(Data) / sizeof(uint8_t));
 constexpr uint32_t FLASH_BLOCK_SIZE = 0x100;
-uint32_t counter = 0;
+constexpr uint32_t SPI_FLASH_MAX_ADDRESS = 0x2000000;
+
+static uint32_t position = 0;
 
 // Flashから読み取った値をData型に変換する
 union PitotDataUnion
@@ -26,6 +28,31 @@ union PitotDataUnion
 
 namespace flash
 {
+    void writeFlashDataToSD(void *pvParameter)
+    {
+        pr_debug("flash write data size: %d", data_size);
+#ifdef DEBUG
+        configASSERT(256 >= data_size);
+#endif
+        while (true)
+        {
+            // numof_maxData個だけDataが送られてくるので、あまりを0埋めして保存
+            uint8_t *pitotData = nullptr;
+            // Queueにデータがくるまで待つ
+            if (xQueueReceive(DistributeToFlashQueue, &pitotData, portMAX_DELAY) == pdTRUE)
+            {
+                if (position >= SPI_FLASH_MAX_ADDRESS)
+                {
+                    error_log("all flash used!!!");
+                    continue;
+                }
+                flash1.write(position, pitotData);
+                delete[] pitotData;
+                position += FLASH_BLOCK_SIZE;
+            }
+        }
+    }
+
     PitotDataUnion pitotData;
     uint8_t tmp[256];
     int get_old_data()
@@ -84,9 +111,9 @@ namespace flash
             // Queueにデータがくるまで待つ
             if (xQueueReceive(DistributeToFlashQueue, &tmp, portMAX_DELAY) == pdTRUE)
             {
-                flash1.write(counter, tmp);
+                flash1.write(position, tmp);
                 delete[] tmp;
-                counter += FLASH_BLOCK_SIZE;
+                position += FLASH_BLOCK_SIZE;
             }
             else
             {
@@ -104,7 +131,7 @@ namespace flash
     {
 #if !defined(DEBUG) || defined(SPIFLASH)
         flash1.erase();
-        counter = 0;
+        position = 0;
 #endif
     }
 }
